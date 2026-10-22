@@ -4,7 +4,7 @@ A teacher workspace for scanning, marking and reviewing multiple-choice answer s
 
 ## Teacher workflow
 
-1. Sign in using an account created by the school administrator.
+1. Sign in with an approved `@delia.edu.hk` Google Workspace account.
 2. Create an assessment: title, subject, level, 1–100 questions, answer sequence, wrong-answer deduction, and passing percentage.
 3. Upload upright PDF or image scans, including a whole class in one multipage PDF.
 4. Return to the assessment after background processing completes.
@@ -21,12 +21,14 @@ Python 3.9+; Python 3.12 is used in the deployment image and CI.
 ```sh
 python3 -m venv .venv
 .venv/bin/pip install .
-.venv/bin/python -m mcmark.web create-user --email teacher@school.example
+.venv/bin/python -m mcmark.web authorize-teacher --email teacher@delia.edu.hk
 export MCK_SECRET_KEY='replace-with-a-long-random-secret'
+# Configure MCK_GOOGLE_CLIENT_ID, MCK_GOOGLE_CLIENT_SECRET and MCK_GOOGLE_REDIRECT_URI
+# See docs/GOOGLE_LOGIN.md; for local HTTP use MCK_HTTPS=0.
 .venv/bin/python -m mcmark.web serve --port 8000
 ```
 
-Open http://127.0.0.1:8000. The server uses Waitress and starts one background worker. Keep one service process per data directory. Accounts, job state, raw files and results live in ignored `instance/` by default. Set `MCK_DATA_DIR` to an absolute private directory for a persistent deployment. A secret is mandatory; generate it with a password manager or `python3 -c 'import secrets; print(secrets.token_hex(32))'` and retain it across restarts. Passwords are entered interactively and hashed; no default account exists.
+Open http://127.0.0.1:8000. The server uses Waitress and starts one background worker. Keep one service process per data directory. Accounts, job state, raw files and results live in ignored `instance/` by default. Set `MCK_DATA_DIR` to an absolute private directory for a persistent deployment. A secret is mandatory; generate it with a password manager or `python3 -c 'import secrets; print(secrets.token_hex(32))'` and retain it across restarts. No default account exists. Google sign-in requires school OAuth configuration; without it the app displays a configuration notice. See [Google login setup](docs/GOOGLE_LOGIN.md). The explicit local-development password mode uses `MCK_AUTH_MODE=password` and `create-user`; passwords are entered interactively and hashed.
 
 On Linux, install Tesseract and appropriate language data. On macOS, the automatic OCR backend uses Tesseract when available, otherwise local Apple Vision with Swift command line tools. Handwriting and signatures are best-effort. Low-confidence or empty readings retain their image crops and require teacher review. A readable but incorrect class number cannot be detected without external roster validation; teachers can correct it using the other written fields.
 
@@ -34,7 +36,7 @@ On Linux, install Tesseract and appropriate language data. On macOS, the automat
 
 ```sh
 docker build -t mc-killer .
-docker run --rm -it -v mc-killer-data:/data mc-killer create-user --data /data --email teacher@school.example
+docker run --rm -it -v mc-killer-data:/data mc-killer authorize-teacher --data /data --email teacher@delia.edu.hk
 docker run --rm -p 127.0.0.1:8000:8000 -v mc-killer-data:/data --env-file /secure/path/mc-killer.env mc-killer serve --host 0.0.0.0 --data /data --port 8000
 ```
 
@@ -66,3 +68,10 @@ Student exports contain marks, percentages, raw response statuses and review sta
 For the Delia sheet, use `mcmark/layouts/delia-layout.json` and `--key answers.json`, where the key is a JSON object such as `{"1":"A","2":"B"}`. Only listed questions are processed. The CLI also supports teacher decisions through `--corrections review_queue.csv`. Its original configuration supports per-question weights and separate correct/wrong/blank/multiple marks; the web pilot exposes the common +1/0 scheme with configurable wrong-answer deduction.
 
 Tests cover scoring, exports, template registration, all 400 empty boxes, pen/cross-out clues, OCR failure evidence, account isolation, upload validation, review recalculation, metadata corrections, stale forms, finalization, worker state and restart handling. Synthetic fixtures are generated locally. Real student scans, names, results, databases, passwords and secrets are not included.
+
+
+## Where the backend and database live
+
+The backend is `mcmark/web.py` (Flask/Waitress), with `mcmark/google_login.py` for school sign-in and the `mcmark/` processing modules. The frontend templates and static files are served by the same application.
+
+SQLite lives at `<MCK_DATA_DIR>/school.sqlite`; the default local directory is `instance/`, and the Docker instructions use `/data/school.sqlite` on the persistent volume. Original scans and review evidence live under `<MCK_DATA_DIR>/batches/`. These are runtime files, excluded from Git. The GitHub repository contains the application, not a running server or online database. No hosting or cloud database has been provisioned yet.

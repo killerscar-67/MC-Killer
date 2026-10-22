@@ -4,7 +4,7 @@
 
 Browser → Flask/Waitress → SQLite + private local files → one background processing thread.
 
-Each teacher owns their assessments. The administrator creates accounts using the CLI. The job queue survives service restarts; processing jobs interrupted by a restart become failed and can be retried. Database results are authoritative, and exports are generated from a database snapshot. Uploaded originals and raw OCR/mark evidence remain available on the server. Review decisions record actor, time, previous values and confirmed values. Finalization locks results.
+Each teacher owns their assessments. The administrator approves school Google accounts using the CLI; see [Google Workspace setup](GOOGLE_LOGIN.md). The job queue survives service restarts; processing jobs interrupted by a restart become failed and can be retried. Database results are authoritative, and exports are generated from a database snapshot. Uploaded originals and raw OCR/mark evidence remain available on the server. Review decisions record actor, time, previous values and confirmed values. Finalization locks results.
 
 The image processor uses OpenCV/PyMuPDF with Tesseract or macOS Vision OCR. No external AI service is integrated and no image is uploaded to an AI provider. OCR accuracy is not guaranteed by confidence values, especially for Chinese handwriting or signatures. Teachers must verify identity and unresolved marks.
 
@@ -12,7 +12,7 @@ The image processor uses OpenCV/PyMuPDF with Tesseract or macOS Vision OCR. No e
 
 - Run one application process against one data directory; multiple Waitress processes and multiple containers sharing this SQLite directory are not supported. The in-process login limiter and startup job recovery assume a single process.
 - Configure a stable secret, an HTTPS reverse proxy, secure cookies and a private persistent volume. Do not expose the development preview or its test account.
-- Provision individual teacher accounts with strong passwords and restrict server/filesystem access to designated administrators.
+- Approve individual @delia.edu.hk teacher accounts, configure school Google OAuth and restrict server/filesystem access to designated administrators.
 - Agree on who can access scans and how long scans, results, backups and audit history should be retained. This release has no automated deletion interface; administrators must manage retention carefully and remove database/file records together.
 - Monitor processing failures, disk space and backups. Review server logs for failed batches; the UI intentionally does not expose internal paths or exception details.
 - Test backup restoration and teacher account procedures before relying on the system for live marks.
@@ -22,7 +22,7 @@ Uploaded PDFs/images are parsed within the service process. This pilot validates
 
 ## Next school-wide milestones
 
-1. School SSO, password reset/account disabling, administrator UI and explicit sharing/department roles.
+1. Administrator UI for the Google teacher allowlist, and explicit sharing/department roles. Google login and CLI access revocation are implemented.
 2. Roster import, identity reconciliation, duplicate resolution workflow and assessment-level permissions.
 3. PostgreSQL, private object storage and an independently supervised durable queue/worker service; bounded concurrency and retry/idempotency controls.
 4. A supported archive/delete workflow with retention schedules, backup restoration checks and operational monitoring.

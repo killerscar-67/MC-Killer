@@ -44,6 +44,10 @@ def initialize(data):
         CREATE TABLE IF NOT EXISTS audit(id INTEGER PRIMARY KEY AUTOINCREMENT, job TEXT NOT NULL REFERENCES jobs(id),
             actor TEXT NOT NULL REFERENCES users(id), at REAL NOT NULL, action TEXT NOT NULL, detail TEXT NOT NULL);
         ''')
+        columns={row['name'] for row in db.execute('PRAGMA table_info(users)')}
+        if 'google_sub' not in columns: db.execute('ALTER TABLE users ADD COLUMN google_sub TEXT')
+        if 'enabled' not in columns: db.execute('ALTER TABLE users ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1')
+        db.execute('CREATE UNIQUE INDEX IF NOT EXISTS users_google_sub ON users(google_sub)')
 
 
 def create_app(data=None, testing=False, start_worker=True):
@@ -57,6 +61,13 @@ def create_app(data=None, testing=False, start_worker=True):
                       MAX_CONTENT_LENGTH=50*1024*1024, SESSION_COOKIE_HTTPONLY=True,
                       SESSION_COOKIE_SAMESITE='Lax', SESSION_COOKIE_SECURE=os.environ.get('MCK_HTTPS')=='1',
                       PERMANENT_SESSION_LIFETIME=8*3600)
+    app.config.update(AUTH_MODE=os.environ.get('MCK_AUTH_MODE','password' if testing else 'google'),
+                      GOOGLE_CLIENT_ID=os.environ.get('MCK_GOOGLE_CLIENT_ID',''),
+                      GOOGLE_CLIENT_SECRET=os.environ.get('MCK_GOOGLE_CLIENT_SECRET',''),
+                      GOOGLE_REDIRECT_URI=os.environ.get('MCK_GOOGLE_REDIRECT_URI',''))
+    if app.config['AUTH_MODE'] not in ('google','password'): raise ValueError('MCK_AUTH_MODE must be google or password')
+    from .google_login import register_google
+    register_google(app,connect,data)
     attempts = {}
     attempts_lock=threading.Lock()
 
@@ -82,7 +93,10 @@ def create_app(data=None, testing=False, start_worker=True):
     def login_required(fn):
         @wraps(fn)
         def wrapper(*args,**kwargs):
-            if not session.get('user'):
+            with connect(data) as db:
+                user=db.execute('SELECT enabled FROM users WHERE id=?',(session.get('user',''),)).fetchone()
+            if not user or not user['enabled'] or session.get('auth_method','password')!=app.config['AUTH_MODE']:
+                session.pop('user',None)
                 return redirect(url_for('login'))
             return fn(*args,**kwargs)
         return wrapper
@@ -101,6 +115,9 @@ def create_app(data=None, testing=False, start_worker=True):
 
     @app.route('/login',methods=['GET','POST'])
     def login():
+        if app.config['AUTH_MODE']=='google':
+            if request.method=='POST': abort(405)
+            return render_template('login.html',google_mode=True,google_configured=all(app.config.get(k) for k in ('GOOGLE_CLIENT_ID','GOOGLE_CLIENT_SECRET','GOOGLE_REDIRECT_URI')))
         if request.method=='POST':
             email=request.form.get('email','').strip().lower()
             key=(request.remote_addr,email)
@@ -114,11 +131,11 @@ def create_app(data=None, testing=False, start_worker=True):
                     abort(429,'Too many attempts. Try again in ten minutes.')
             with connect(data) as db:
                 user=db.execute('SELECT * FROM users WHERE email=?',(email,)).fetchone()
-            if user and check_password_hash(user['password'],request.form.get('password','')):
+            if user and user['enabled'] and user['password'] and check_password_hash(user['password'],request.form.get('password','')):
                 with attempts_lock:
                     attempts.pop(key,None)
                 session.clear()
-                session.update(user=user['id'],email=user['email'],csrf=secrets.token_urlsafe(32))
+                session.update(user=user['id'],email=user['email'],auth_method='password',csrf=secrets.token_urlsafe(32))
                 session.permanent=True
                 return redirect(url_for('index'))
             with attempts_lock:
@@ -324,6 +341,7 @@ def create_app(data=None, testing=False, start_worker=True):
     @app.errorhandler(404)
     @app.errorhandler(409)
     @app.errorhandler(429)
+    @app.errorhandler(503)
     def error(exc):
         return render_template('error.html',message=exc.description),exc.code
 
@@ -391,19 +409,29 @@ def worker(data):
 
 def main():
     parser=argparse.ArgumentParser(description='MC-Killer teacher pilot')
-    parser.add_argument('command',choices=['serve','create-user'])
+    parser.add_argument('command',choices=['serve','create-user','authorize-teacher','revoke-teacher'])
     parser.add_argument('--data',default=os.environ.get('MCK_DATA_DIR',str(ROOT/'instance')))
     parser.add_argument('--email')
     parser.add_argument('--port',type=int,default=8000)
     parser.add_argument('--host',default='127.0.0.1')
     args=parser.parse_args()
     initialize(args.data)
-    if args.command=='create-user':
+    if args.command in ('authorize-teacher','revoke-teacher'):
+        email=(args.email or input('Teacher email: ')).strip().lower()
+        if email.count('@')!=1 or not email.endswith('@delia.edu.hk'): parser.error('Use an @delia.edu.hk teacher email.')
+        with connect(args.data) as db:
+            if args.command=='authorize-teacher':
+                db.execute('INSERT INTO users(id,email,password) VALUES(?,?,?) ON CONFLICT(email) DO UPDATE SET enabled=1',(uuid.uuid4().hex,email,''))
+                print('Teacher authorized for Google sign-in.')
+            else:
+                db.execute('UPDATE users SET enabled=0 WHERE email=?',(email,))
+                print('Teacher access revoked, including existing sessions.')
+    elif args.command=='create-user':
         email=(args.email or input('Teacher email: ')).strip().lower()
         password=getpass.getpass('Password (at least 12 characters): ')
         if '@' not in email or len(password)<12: parser.error('Use a valid email and a password of at least 12 characters.')
         with connect(args.data) as db:
-            try: db.execute('INSERT INTO users VALUES(?,?,?)',(uuid.uuid4().hex,email,generate_password_hash(password,method='pbkdf2:sha256:1000000')))
+            try: db.execute('INSERT INTO users(id,email,password) VALUES(?,?,?)',(uuid.uuid4().hex,email,generate_password_hash(password,method='pbkdf2:sha256:1000000')))
             except sqlite3.IntegrityError: parser.error('That account already exists.')
         print('Teacher account created.')
     else:

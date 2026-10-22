@@ -7,7 +7,7 @@ name = "mcmark"
 version = "0.1.0"
 description = "Configurable optical MCQ marking and class analytics"
 requires-python = ">=3.9"
-dependencies = ["numpy", "opencv-python-headless", "Pillow", "pymupdf", "pytesseract", "Flask>=3.0,<4", "waitress>=3,<4"]
+dependencies = ["numpy", "opencv-python-headless", "Pillow", "pymupdf", "pytesseract", "Flask>=3.0,<4", "waitress>=3,<4", "Authlib>=1.6,<2", "requests>=2.32,<3"]
 
 [project.scripts]
 mcmark = "mcmark.cli:main"

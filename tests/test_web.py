@@ -17,8 +17,8 @@ class TeacherWebTests(unittest.TestCase):
         self.app=create_app(self.data,testing=True,start_worker=False)
         self.client=self.app.test_client()
         with connect(self.data) as db:
-            db.execute('INSERT INTO users VALUES(?,?,?)',('alice','alice@school.test',generate_password_hash('a-long-test-password',method='pbkdf2:sha256:1000')))
-            db.execute('INSERT INTO users VALUES(?,?,?)',('bob','bob@school.test',generate_password_hash('a-long-test-password',method='pbkdf2:sha256:1000')))
+            db.execute('INSERT INTO users(id,email,password) VALUES(?,?,?)',('alice','alice@school.test',generate_password_hash('a-long-test-password',method='pbkdf2:sha256:1000')))
+            db.execute('INSERT INTO users(id,email,password) VALUES(?,?,?)',('bob','bob@school.test',generate_password_hash('a-long-test-password',method='pbkdf2:sha256:1000')))
         self.client.get('/login')
         with self.client.session_transaction() as session: self.csrf=session['csrf']
         response=self.client.post('/login',data={'csrf':self.csrf,'email':'alice@school.test','password':'a-long-test-password'})
