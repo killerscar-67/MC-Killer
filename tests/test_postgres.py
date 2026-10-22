@@ -36,7 +36,7 @@ class PostgresIntegrationTests(unittest.TestCase):
             client=app.test_client()
             with connect(data) as db:
                 db.execute('INSERT INTO users(id,email,password) VALUES(?,?,?)',('pg-teacher','pg@delia.edu.hk',''))
-            with client.session_transaction() as session: session.update(user='pg-teacher',auth_method='password',csrf='token')
+            with client.session_transaction() as session: session.update(user='pg-teacher',email='pg@delia.edu.hk',auth_method='password',csrf='token')
             from PIL import Image
             image=io.BytesIO();Image.new('RGB',(600,800),'white').save(image,format='PNG');image.seek(0)
             response=client.post('/assessments/new',data={'csrf':'token','title':'Postgres test','count':'1','key':'A','wrong':'0','pass':'50','scans':(image,'scan.png')})
