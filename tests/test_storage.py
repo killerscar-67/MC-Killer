@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch, Mock
 
-from mcmark.storage import SupabaseStorage, StorageError, configured_storage, safe_path
+from mcmark.storage import SupabaseStorage, StorageError, configured_storage, safe_path, relative_evidence, validate_evidence
 from mcmark.web import create_app, connect, process_job
 
 
@@ -26,6 +26,20 @@ class MemoryStorage(SupabaseStorage):
 
 
 class StorageTests(unittest.TestCase):
+    def test_migration_rebases_old_paths_and_requires_every_evidence_file(self):
+        jid='a'*32
+        with tempfile.TemporaryDirectory() as directory:
+            output=Path(directory)/'backup/batches'/jid/'output'
+            (output/'review/metadata').mkdir(parents=True)
+            old='/data/batches/'+jid+'/output/'
+            rows=relative_evidence([{'metadata_details':{'name':{'crop':old+'review/metadata/name.png'}},
+                                     'responses':[{'review_crop':old+'review/question.png'}]}],output,jid)
+            self.assertEqual(rows[0]['metadata_details']['name']['crop'],'review/metadata/name.png')
+            for relative in ('review/00001.png','review/metadata/name.png','review/question.png'):
+                with self.assertRaises(StorageError): validate_evidence(rows,output)
+                (output/relative).write_bytes(b'evidence')
+            self.assertEqual(len(validate_evidence(rows,output)),3)
+
     def test_integrity_and_traversal(self):
         store = MemoryStorage()
         with tempfile.TemporaryDirectory() as directory:

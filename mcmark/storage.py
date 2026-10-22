@@ -122,18 +122,53 @@ def job_prefix(job):
     return 'batches/' + job['id']
 
 
-def relative_evidence(value, output):
+def relative_evidence(value, output, batch_id=None):
     """Keep result image references independent of a container's filesystem path."""
     if isinstance(value, dict):
-        return {k: relative_evidence(v, output) for k, v in value.items()}
+        return {k: relative_evidence(v, output, batch_id) for k, v in value.items()}
     if isinstance(value, list):
-        return [relative_evidence(v, output) for v in value]
+        return [relative_evidence(v, output, batch_id) for v in value]
     if isinstance(value, str):
         try:
             return Path(value).resolve().relative_to(output.resolve()).as_posix()
         except (ValueError, OSError):
             pass
+        if batch_id:
+            # Preserved files may be mounted at a different root than the old
+            # worker. Only rebase this exact batch's output subtree.
+            marker = '/batches/' + batch_id + '/output/'
+            normalized = value.replace('\\', '/')
+            if marker in normalized:
+                relative = normalized.split(marker, 1)[1]
+                safe_path(relative)
+                if relative.startswith('review/'):
+                    return relative
     return value
+
+
+def validate_evidence(rows, output):
+    required = {'review/%05d.png' % (i+1) for i in range(len(rows))}
+
+    def collect(value):
+        if isinstance(value, dict):
+            for key, item in value.items():
+                if key in ('crop', 'review_crop') and item:
+                    if not isinstance(item, str) or not item.startswith('review/'):
+                        raise StorageError('Invalid legacy evidence reference; migration stopped.')
+                    required.add(item)
+                else:
+                    collect(item)
+        elif isinstance(value, list):
+            for item in value:
+                collect(item)
+    collect(rows)
+    root = Path(output).resolve()
+    for item in required:
+        path = (root / str(safe_path(item))).resolve()
+        path.relative_to(root)
+        if not path.is_file() or not path.stat().st_size:
+            raise StorageError('Missing review evidence; migration stopped.')
+    return required
 
 
 def main():
@@ -175,19 +210,23 @@ def main():
             raise StorageError('Missing local originals for assessment ' + job['id'] + '; migration stopped.')
         if job['state'] == 'ready' and not (directory/'output/review').is_dir():
             raise StorageError('Missing local review evidence for assessment ' + job['id'] + '; migration stopped.')
+        rows = relative_evidence(json.loads(job['results']), directory/'output', job['id'])
+        required = validate_evidence(rows, directory/'output') if job['state']=='ready' else set()
         prefix = job_prefix(job)
         if (directory/'manifest.json').is_file() and not (directory/'input/manifest.json').exists():
             (directory/'input/manifest.json').write_bytes((directory/'manifest.json').read_bytes())
         storage.save_tree(prefix+'/input', directory/'input')
         if (directory/'output').is_dir():
             storage.save_tree(prefix+'/output', directory/'output')
+            uploaded = {record['path'] for record in storage.records(prefix+'/output')}
+            if not required.issubset(uploaded):
+                raise StorageError('Incomplete uploaded evidence; migration stopped.')
         # Verify every object before recording the switch in the database.
         for section in ('input', 'output'):
             if (directory/section).is_dir():
                 for record in storage.records(prefix+'/'+section):
                     storage.read_verified(prefix+'/'+section, record)
         config.update(_storage='supabase', _storage_bucket=storage.bucket)
-        rows = relative_evidence(json.loads(job['results']), directory/'output')
         with connect(data) as db:
             begin_write(db)
             current = locked(db, 'SELECT updated FROM jobs WHERE id=?', (job['id'],)).fetchone()

@@ -20,7 +20,7 @@ from werkzeug.utils import secure_filename
 from .core import export, grade, validate
 from .review import refresh_review
 from .database import connect,initialize,begin_write,locked,next_queued,INTEGRITY_ERRORS
-from .storage import configured_storage, job_prefix, relative_evidence, StorageError
+from .storage import configured_storage, job_prefix, relative_evidence, validate_evidence, StorageError
 
 ROOT = Path(__file__).resolve().parents[1]
 FIELDS = ['name','signature','class','student_id','subject_paper']
@@ -394,6 +394,7 @@ def process_job(data,job):
             raise ValueError('Some sheets failed processing. Check scan quality and retry; partial batches cannot be finalized.')
         rows=relative_evidence(rows,directory/'output')
         if storage:
+            validate_evidence(rows,directory/'output')
             storage.save_tree(job_prefix(job)+'/output',directory/'output')
         with connect(data) as db:
             db.execute('UPDATE jobs SET state=?,results=?,error=?,updated=? WHERE id=?',('ready',json.dumps(rows,ensure_ascii=False),'',time.time(),job['id']))
