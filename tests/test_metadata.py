@@ -60,3 +60,20 @@ class WrittenMetadataTests(unittest.TestCase):
             self.assertEqual(events,['metadata_unrecognized','metadata_ocr_error'])
             for detail in profile['metadata_details'].values():
                 self.assertTrue(Path(detail['crop']).is_file())
+
+    def test_class_and_number_format_preserves_raw_ocr(self):
+        from mcmark.vision import metadata
+        config = {**self.config, 'metadata':{name:self.config['metadata'][name] for name in ('class','student_id')}}
+        def reading(value): return {'text':[value], 'conf':['95']}
+        with patch('mcmark.ocr.recognize',side_effect=[reading(' 5 c '),reading(' 04 ')]):
+            profile=metadata(self.gray,config,lambda *a,**kw:None)
+        self.assertEqual((profile['class'],profile['student_id']),('5C','04'))
+        self.assertEqual(profile['metadata_details']['class']['raw_text'],'5 c')
+        for bad in ('SC','5CC','5-C','5'):
+            events=[]
+            with patch('mcmark.ocr.recognize',side_effect=[reading(bad),reading('O4')]):
+                profile=metadata(self.gray,config,lambda kind,**kw:events.append(kind))
+            self.assertEqual(profile['metadata_details']['class']['status'],'unrecognized')
+            self.assertEqual(profile['metadata_details']['student_id']['status'],'unrecognized')
+            self.assertEqual(profile['student_id'],'O4')
+            self.assertEqual(events,['metadata_unrecognized','metadata_unrecognized'])

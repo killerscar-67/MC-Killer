@@ -190,9 +190,14 @@ def metadata(gray, config, log, evidence_dir=None, evidence_prefix="sheet"):
                 detail['engine'] = text.get('engine','unknown')
                 words = [(word,float(conf)) for word,conf in zip(text['text'], text['conf']) if word.strip()]
                 value = ' '.join(word for word,_ in words).strip()
+                raw_value = value
+                # Canonicalize spacing/case only; never guess ambiguous handwriting.
+                if name in ('class', 'student_id'):
+                    value = re.sub(r'\s+', '', value).upper()
                 result[name] = value
+                detail['raw_text'] = raw_value
                 detail.update(text=value, confidence=min((conf for _,conf in words), default=None), status='recognized')
-                if not value or any(conf < zone.get('min_confidence', 70) for _,conf in words) or not re.fullmatch(zone.get('pattern', r'.+'), value):
+                if not value or any(conf < zone.get('min_confidence', 70) for _,conf in words) or not re.fullmatch({'class': r'[0-9]+[A-Z]', 'student_id': r'[0-9]+'}.get(name, zone.get('pattern', r'.+')), value):
                     detail['status'] = 'unrecognized'
                     log('metadata_unrecognized', field=name, value=value, confidence=detail['confidence'], crop=detail.get('crop'))
             except Exception as exc:
