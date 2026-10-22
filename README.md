@@ -2,6 +2,19 @@
 
 A teacher workspace for scanning, marking and reviewing multiple-choice answer sheets. This first release supports the Delia 100-question A–D sheet, using only the questions in each assessment's answer key.
 
+## Current pilot (22 October 2026)
+
+- Website: https://mc-killer.pages.dev — Cloudflare Pages gateway to the Python service on Northflank.
+- Northflank: HW2 / Default / MC-Killer, US Central, free `nf-compute-20` (0.2 shared vCPU, 512 MB RAM, 2 GB ephemeral storage).
+- Database: Supabase AC / MC-killer, Singapore, private `mc_killer` schema. Initial migration applied and recorded.
+- Google login: verified `@deliahw2.edu.hk` accounts plus an explicit approved-teacher list. The Google consent screen currently displays WiserLife; a separate MC-Killer OAuth configuration is still recommended.
+- OCR: Tesseract English + Traditional Chinese on Linux. All five written fields are retained; readings below 70, blanks, errors and invalid identity formats require review. Confidence is not a calibrated correctness probability.
+- Class is digits followed by one uppercase letter; class number is digits only. Spaces/case are normalized, leading zeros retained, and ambiguous characters are not guessed.
+
+**Scans and review images still use ephemeral local storage.** They can disappear on redeployment/restart. Database records survive, but image evidence may become unavailable. Use anonymized pilot material until private persistent object storage is implemented.
+
+See [today's changelog](CHANGELOG.md) and [continuation notes](docs/HANDOFF.md) to resume on another device. Never copy secrets or student scans into Git.
+
 ## Teacher workflow
 
 1. Sign in with an approved `@deliahw2.edu.hk` Google Workspace account.
@@ -42,7 +55,7 @@ docker run --rm -p 127.0.0.1:8000:8000 -v mc-killer-data:/data --env-file /secur
 
 The environment file contains `MCK_SECRET_KEY` and, when served through HTTPS, `MCK_HTTPS=1`. Put a school-managed HTTPS reverse proxy in front of the service. The container runs as a non-root user. `/healthz` checks service/database availability without exposing assessment data. Back up the entire persistent data directory consistently, including the SQLite database and associated files.
 
-This is a **single-server pilot**, not a completed school-wide production deployment. It is not published on the internet by this repository. See [deployment and next steps](docs/DEPLOYMENT.md) before exposing it to teachers.
+This is a **single-server pilot**, not a completed school-wide production deployment. The current hosted pilot is listed above; it is not yet ready for school-wide use. See [deployment and next steps](docs/DEPLOYMENT.md) before exposing it to teachers.
 
 ## Processing and data
 
@@ -74,7 +87,7 @@ Tests cover scoring, exports, template registration, all 400 empty boxes, pen/cr
 
 The backend is `mcmark/web.py` (Flask/Waitress), with `mcmark/google_login.py` for school sign-in and the `mcmark/` processing modules. The frontend templates and static files are served by the same application.
 
-With `MCK_DATABASE_URL`, the app uses Supabase PostgreSQL in a private `mc_killer` schema. Without it, SQLite lives at `<MCK_DATA_DIR>/school.sqlite`; the default local directory is `instance/`, and the Docker instructions use `/data/school.sqlite` on the persistent volume. Original scans and review evidence live under `<MCK_DATA_DIR>/batches/`. These are runtime files, excluded from Git. The GitHub repository contains the application, not a running server or online database. No hosting or cloud database has been provisioned yet.
+With `MCK_DATABASE_URL`, the app uses Supabase PostgreSQL in a private `mc_killer` schema. Without it, SQLite lives at `<MCK_DATA_DIR>/school.sqlite`; the default local directory is `instance/`, and the Docker instructions use `/data/school.sqlite` on the persistent volume. Original scans and review evidence live under `<MCK_DATA_DIR>/batches/`. These are runtime files, excluded from Git. The repository stores application source; the running service is on Northflank and the hosted database is on Supabase, as listed above.
 
 
 For Supabase setup, see [PostgreSQL deployment](docs/SUPABASE.md). The database migration is prepared in `supabase/migrations/`; committing it does not create a hosted project. No existing SQLite/student data is uploaded automatically. Scans still require persistent local storage until the private object-storage integration is implemented.

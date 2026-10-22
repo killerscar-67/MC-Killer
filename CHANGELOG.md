@@ -1,0 +1,24 @@
+# Changelog
+
+## 2026-10-22
+
+### Added
+- MCQ scan pipeline for PDFs/images, Delia 100-question A–D template and assessment-specific question counts/keys.
+- Optical-density marking, blank/multiple/faint/cross-out review flags, evidence crops and teacher corrections.
+- OCR of all five written fields: name, signature, class, class number and subject/paper.
+- Configurable scoring, class summaries, item facility/distractor analytics, CSV and JSON exports.
+- Teacher web workspace, Google OIDC, approved-teacher CLI, assessment ownership, audit history and finalization.
+- Supabase PostgreSQL adapter, private schema migration, RLS, connection pooling and PostgreSQL CI integration.
+- Free Northflank pilot and Cloudflare Pages fixed-origin streaming gateway at mc-killer.pages.dev.
+
+### Fixed
+- School Google domain corrected from delia.edu.hk to deliahw2.edu.hk, including validation, account picker, CLI and documentation.
+- Class OCR normalized to digits + one uppercase letter; class number to digits-only validation. Raw OCR remains available and invalid readings require review.
+- Hosted connectivity setup: IPv4 session pooler and mounted CA certificate for verified TLS.
+
+### Validation and limitations
+- Latest local suite: 35 tests, 34 passed and PostgreSQL integration skipped locally. Earlier full PostgreSQL CI passed; check latest GitHub Actions before rollout.
+- Public login and database health verified before the latest OCR-format change; teacher completed school sign-in/approval and created an assessment.
+- OCR remains Tesseract; PaddleOCR/Google Vision were researched but not installed or enabled.
+- No scans were submitted to an external AI/OCR provider by the application.
+- Uploaded scans/evidence remain ephemeral. No roster reconciliation, admin approval UI or school-wide capacity benchmark yet.

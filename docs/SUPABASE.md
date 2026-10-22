@@ -6,7 +6,9 @@ Use **Render to run the existing Python/Flask Docker image**, with Supabase Post
 
 Start with one service process and its existing worker, backed by a persistent private disk for scans. Supabase private Storage and an independently supervised worker are the next step before separating services or adding replicas. Database support alone does not make the file pipeline stateless: do not deploy this version with ephemeral-only storage, multiple replicas or a worker without the same files.
 
-The hosted Supabase schema/project must be explicitly provisioned. At the time this change was prepared, organization creation awaited dashboard sign-in; no unrelated project was modified. The repository does not provision a Render service, incur a backend hosting charge or create a live URL.
+The hosted database is provisioned in the user-selected **AC** organization, project **MC-killer** (`tdynkamfmbktqzebvrav`), in Singapore. Migration `20261022090442` was applied through the SQL editor and recorded in the CLI-compatible migration history. Verification found zero application records, RLS enabled on all three application tables, and no anonymous/authenticated role access. Security Advisor reported no findings; Performance Advisor only reported unused indexes on the empty tables.
+
+The live backend is now Northflank, not the earlier proposed paid Render service. Database access uses the IPv4-capable session pooler and a mounted Supabase CA certificate with `verify-full`. Runtime secrets stay in Northflank. The earlier Render form was not deployed. Confirm that production uses a dedicated least-privilege login rather than the database-owner `postgres` credential; the latest observed authentication troubleshooting used `postgres`.
 
 ## Database setup
 
