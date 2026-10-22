@@ -2,6 +2,10 @@
 
 Snapshot: 22 October 2026 (Asia/Hong_Kong).
 
+Storage update (23 October): private bucket `mc-killer-scans` now exists. The
+optional backend and migration procedure are in [STORAGE.md](STORAGE.md).
+Runtime activation and restart verification must be confirmed separately.
+
 ## Source and deployments
 - Repository: https://github.com/killerscar-67/MC-Killer
 - PR #1 contains the initial teacher pilot and today's fixes; main is the continuation branch after merge.

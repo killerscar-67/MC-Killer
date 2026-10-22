@@ -11,7 +11,7 @@ A teacher workspace for scanning, marking and reviewing multiple-choice answer s
 - OCR: Tesseract English + Traditional Chinese on Linux. All five written fields are retained; readings below 70, blanks, errors and invalid identity formats require review. Confidence is not a calibrated correctness probability.
 - Class is digits followed by one uppercase letter; class number is digits only. Spaces/case are normalized, leading zeros retained, and ambiguous characters are not guessed.
 
-**Scans and review images still use ephemeral local storage.** They can disappear on redeployment/restart. Database records survive, but image evidence may become unavailable. Use anonymized pilot material until private persistent object storage is implemented.
+**Private persistent storage is implemented as an opt-in backend.** See [storage setup and migration](docs/STORAGE.md). Hosted activation still requires runtime secret configuration, existing-file migration and deployment verification. Development defaults to local mode.
 
 See [today's changelog](CHANGELOG.md) and [continuation notes](docs/HANDOFF.md) to resume on another device. Never copy secrets or student scans into Git.
 
@@ -90,4 +90,4 @@ The backend is `mcmark/web.py` (Flask/Waitress), with `mcmark/google_login.py` f
 With `MCK_DATABASE_URL`, the app uses Supabase PostgreSQL in a private `mc_killer` schema. Without it, SQLite lives at `<MCK_DATA_DIR>/school.sqlite`; the default local directory is `instance/`, and the Docker instructions use `/data/school.sqlite` on the persistent volume. Original scans and review evidence live under `<MCK_DATA_DIR>/batches/`. These are runtime files, excluded from Git. The repository stores application source; the running service is on Northflank and the hosted database is on Supabase, as listed above.
 
 
-For Supabase setup, see [PostgreSQL deployment](docs/SUPABASE.md). The database migration is prepared in `supabase/migrations/`; committing it does not create a hosted project. No existing SQLite/student data is uploaded automatically. Scans still require persistent local storage until the private object-storage integration is implemented.
+For Supabase setup, see [PostgreSQL deployment](docs/SUPABASE.md). The database migration is prepared in `supabase/migrations/`; committing it does not create a hosted project. No existing SQLite/student data is uploaded automatically. For private scan storage, see [storage setup and migration](docs/STORAGE.md).

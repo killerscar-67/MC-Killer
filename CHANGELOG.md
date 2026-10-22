@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-10-23
+
+### Added
+- Opt-in private Supabase Storage backend for originals and review evidence, with integrity manifests and restart recovery.
+- Ownership-checked image proxy, relative evidence references, generated upload filenames and required-storage configuration.
+- Storage connectivity check and verified migration command that retains existing local files.
+- Private hosted `mc-killer-scans` bucket (50 MB object limit); runtime activation/deployment verification remains separate.
+- Tests for storage integrity, privacy, failures and evidence access after local files disappear.
+
+### Fixed
+- Close a legacy SQLite fixture connection so test cleanup works on Windows.
+
 ## 2026-10-22
 
 ### Added

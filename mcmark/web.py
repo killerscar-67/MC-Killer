@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import secrets
+import shutil
 import threading
 import time
 import uuid
@@ -19,6 +20,7 @@ from werkzeug.utils import secure_filename
 from .core import export, grade, validate
 from .review import refresh_review
 from .database import connect,initialize,begin_write,locked,next_queued,INTEGRITY_ERRORS
+from .storage import configured_storage, job_prefix, relative_evidence, StorageError
 
 ROOT = Path(__file__).resolve().parents[1]
 FIELDS = ['name','signature','class','student_id','subject_paper']
@@ -31,6 +33,9 @@ def create_app(data=None, testing=False, start_worker=True):
     if not secret and not testing:
         raise RuntimeError('Set MCK_SECRET_KEY to a random secret before starting the server')
     initialize(data)
+    storage = configured_storage()
+    if storage:
+        storage.check()
     app = Flask(__name__)
     app.config.update(SECRET_KEY=secret or 'test-only-secret', TESTING=testing, DATA=data,
                       MAX_CONTENT_LENGTH=50*1024*1024, SESSION_COOKIE_HTTPONLY=True,
@@ -164,22 +169,31 @@ def create_app(data=None, testing=False, start_worker=True):
                 extension=Path(filename).suffix.lower()
                 if extension not in ALLOWED:
                     raise ValueError('Only PDF, PNG, JPEG, TIFF and BMP files are supported.')
-                destination=source/f'{i+1:03d}-{filename}'
+                destination=source/f'{i+1:03d}-{uuid.uuid4().hex}{extension}'
                 f.save(destination)
                 total_pages+=inspect_upload(destination)
                 if total_pages>200:
                     raise ValueError('Limit each batch to 200 pages.')
                 manifest.append({'stored':destination.name,'original':f.filename,'sha256':hashlib.sha256(destination.read_bytes()).hexdigest()})
-            (directory/'manifest.json').write_text(json.dumps(manifest))
+            (source/'manifest.json').write_text(json.dumps(manifest))
+            if storage:
+                # Do not enqueue until originals and their integrity manifest are durable.
+                storage.save_tree('batches/'+jid+'/input', source)
+                config['_storage'] = 'supabase'
+                config['_storage_bucket'] = storage.bucket
+                shutil.rmtree(directory)
             now=time.time()
             with connect(data) as db:
                 db.execute('INSERT INTO jobs(id,owner,title,subject,level,state,created,updated,config) VALUES(?,?,?,?,?,?,?,?,?)',
                     (jid,session['user'],title,request.form.get('subject','').strip()[:160],request.form.get('level','').strip()[:80],'queued',now,now,json.dumps(config)))
                 audit(db,jid,'created',{'files':len(uploads),'pages':total_pages})
             return redirect(url_for('assessment',jid=jid))
+        except StorageError:
+            if directory:
+                shutil.rmtree(directory,ignore_errors=True)
+            abort(503,'Private scan storage is unavailable. The batch was not queued. Try again later.')
         except (ValueError,TypeError,OSError) as exc:
             if directory:
-                import shutil
                 shutil.rmtree(directory,ignore_errors=True)
             flash(str(exc),'error')
             return render_template('new.html'),400
@@ -205,7 +219,8 @@ def create_app(data=None, testing=False, start_worker=True):
         def asset(path):
             if not path: return None
             try:
-                relative=Path(path).resolve().relative_to(output)
+                relative=Path(path).resolve().relative_to(output) if Path(path).is_absolute() else Path(path)
+                if relative.parts[0]!='review' or '..' in relative.parts: return None
             except ValueError:
                 return None
             return url_for('image',jid=jid,path=relative.as_posix())
@@ -215,12 +230,21 @@ def create_app(data=None, testing=False, start_worker=True):
     @app.get('/assessments/<jid>/images/<path:path>')
     @login_required
     def image(jid,path):
-        owned(jid)
+        job=owned(jid)
         root=(data/'batches'/jid/'output'/'review').resolve()
         candidate=(data/'batches'/jid/'output'/path).resolve()
         try: candidate.relative_to(root)
         except ValueError: abort(404)
-        if candidate.suffix.lower()!='.png' or not candidate.is_file(): abort(404)
+        if candidate.suffix.lower()!='.png': abort(404)
+        if json.loads(job['config']).get('_storage')=='supabase':
+            if not storage or storage.bucket!=json.loads(job['config']).get('_storage_bucket'):
+                abort(503,'Private scan storage is not configured.')
+            try:
+                content=storage.read_file(job_prefix(job)+'/output',candidate.relative_to(root.parent).as_posix())
+            except FileNotFoundError: abort(404)
+            except StorageError: abort(503,'Private scan storage is unavailable. Try again later.')
+            return send_file(io.BytesIO(content),mimetype='image/png')
+        if not candidate.is_file(): abort(404)
         return send_file(candidate,mimetype='image/png')
 
     @app.post('/assessments/<jid>/sheets/<int:index>/review')
@@ -355,12 +379,26 @@ def process_job(data,job):
     from .cli import run
     directory=Path(data)/'batches'/job['id']
     try:
-        code=run([directory/'input'],json.loads(job['config']),directory/'output')
+        config=json.loads(job['config'])
+        storage=configured_storage() if config.get('_storage')=='supabase' else None
+        if config.get('_storage')=='supabase':
+            if not storage or storage.bucket!=config.get('_storage_bucket'):
+                raise StorageError('The assessment storage backend is not configured.')
+            shutil.rmtree(directory,ignore_errors=True)
+            storage.restore_tree(job_prefix(job)+'/input',directory/'input')
+        # Deployment paths can change between containers.
+        config['template_image']=str(Path(__file__).parent/'layouts/delia-template.png')
+        code=run([directory/'input'],config,directory/'output')
         rows=json.loads((directory/'output/results.json').read_text())
         if code or not rows:
             raise ValueError('Some sheets failed processing. Check scan quality and retry; partial batches cannot be finalized.')
+        rows=relative_evidence(rows,directory/'output')
+        if storage:
+            storage.save_tree(job_prefix(job)+'/output',directory/'output')
         with connect(data) as db:
             db.execute('UPDATE jobs SET state=?,results=?,error=?,updated=? WHERE id=?',('ready',json.dumps(rows,ensure_ascii=False),'',time.time(),job['id']))
+        if storage:
+            shutil.rmtree(directory,ignore_errors=True)
     except Exception:
         logging.exception('Batch %s failed',job['id'])
         with connect(data) as db:
