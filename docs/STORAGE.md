@@ -8,7 +8,13 @@ ownership before proxying private files; no storage credential reaches the brows
 
 Private bucket `mc-killer-scans` was created in project `tdynkamfmbktqzebvrav`
 on 23 October 2026, with a 50 MB object limit and no public access policies.
-Hosted activation requires these Northflank runtime settings:
+Northflank is configured with the following runtime settings and deploys
+`codex/persistent-scan-storage` (PR #2):
+
+Live verification passed: private upload/download, blocked public download, and
+retrieval of synthetic original/review images with matching SHA-256 checksums
+after container replacement. Synthetic fixtures remain under
+`checks/restart-20261023/`; they contain the blank sheet template, no student data.
 
 ```dotenv
 MCK_STORAGE_BACKEND=supabase

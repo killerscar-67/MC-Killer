@@ -4,7 +4,9 @@ Snapshot: 22 October 2026 (Asia/Hong_Kong).
 
 Storage update (23 October): private bucket `mc-killer-scans` now exists. The
 optional backend and migration procedure are in [STORAGE.md](STORAGE.md).
-Runtime activation and restart verification must be confirmed separately.
+The backend runtime is configured and release branch `codex/persistent-scan-storage`
+is deployed (PR #2). Three existing ready records had zero local scan files, so
+historical evidence could not be migrated. New uploads use persistent storage.
 
 ## Source and deployments
 - Repository: https://github.com/killerscar-67/MC-Killer
@@ -12,7 +14,7 @@ Runtime activation and restart verification must be confirmed separately.
 - Public website: https://mc-killer.pages.dev
 - Cloudflare account: existing connected account; Pages project `mc-killer`, Direct Upload. Gateway source is in `cloudflare/pages/`. It is not automatically deployed from Git.
 - Northflank service: https://app.northflank.com/t/hw2/project/default/services/mc-killer
-- Northflank currently builds `codex/teacher-web-pilot` automatically. After merge, switch its build/deployment branch to `main` before further development. Branch change can restart the service and lose ephemeral image files.
+- Northflank now builds `codex/persistent-scan-storage` automatically (PR #2). Switch to `main` after that PR is merged. Storage settings must remain configured across deployments.
 - Supabase: https://supabase.com/dashboard/project/tdynkamfmbktqzebvrav (AC organization, MC-killer project, Singapore).
 - Applied migration: `20261022090442_mc_killer_initial.sql`; recorded in `supabase_migrations.schema_migrations`. Do not reapply blindly.
 
@@ -30,7 +32,7 @@ python -m mcmark.web revoke-teacher --data /data --email teacher@deliahw2.edu.hk
 Only approve teachers. Google consent currently says WiserLife; create an independent MC-Killer OAuth configuration to avoid confusion without changing the other app. Confirm dedicated least-privilege database login; owner login was used during troubleshooting and should be replaced before live use.
 
 ## Highest-priority remaining work
-1. Implement private persistent object storage for originals/evidence. PostgreSQL holds results/audits, but `/data` files are ephemeral and are lost on restarts/redeployments.
+1. Private persistent object storage is enabled for new uploads. Agree retention and independent object backups; missing historical images cannot be recovered from the current container.
 2. Benchmark OCR against teacher-verified anonymized field crops, separately for numbers, English and Traditional Chinese handwriting. Compare PaddleOCR PP-OCRv5 and current Tesseract; cloud OCR requires an approved data flow and credentials. Do not infer better accuracy without measurements.
 3. Keep review flags for ambiguous marks/metadata. Current OCR threshold: minimum word confidence below 70; blank, error and format failures also flag review. Raw text and evidence retained.
 4. Add roster reconciliation, teacher approval UI, backup/retention operations and capacity benchmarks. Current service has only 512 MB RAM.

@@ -11,7 +11,7 @@ A teacher workspace for scanning, marking and reviewing multiple-choice answer s
 - OCR: Tesseract English + Traditional Chinese on Linux. All five written fields are retained; readings below 70, blanks, errors and invalid identity formats require review. Confidence is not a calibrated correctness probability.
 - Class is digits followed by one uppercase letter; class number is digits only. Spaces/case are normalized, leading zeros retained, and ambiguous characters are not guessed.
 
-**Private persistent storage is implemented as an opt-in backend.** See [storage setup and migration](docs/STORAGE.md). Hosted activation still requires runtime secret configuration, existing-file migration and deployment verification. Development defaults to local mode.
+**New hosted uploads use private persistent Supabase Storage (23 October 2026).** Originals and review evidence are saved outside the container. Development defaults to local mode. Three pre-existing assessment records had no local scan files at setup; their missing images could not be migrated. See [storage setup and migration](docs/STORAGE.md).
 
 See [today's changelog](CHANGELOG.md) and [continuation notes](docs/HANDOFF.md) to resume on another device. Never copy secrets or student scans into Git.
 
