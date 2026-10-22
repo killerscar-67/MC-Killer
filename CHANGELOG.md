@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-10-23
+
+### Added
+- Opt-in private Supabase Storage backend for originals and review evidence, with integrity manifests and restart recovery.
+- Ownership-checked image proxy, relative evidence references, generated upload filenames and required-storage configuration.
+- Storage connectivity check and verified migration command that retains existing local files.
+- Private hosted `mc-killer-scans` bucket (50 MB object limit), configured backend secrets and deployed persistent-storage release.
+- Tests for storage integrity, privacy, failures and evidence access after local files disappear.
+
+### Fixed
+- Close a legacy SQLite fixture connection so test cleanup works on Windows.
+
+### Validation and limitations
+- Local suite: 41 tests, 40 passed and disposable PostgreSQL integration skipped locally. GitHub CI including PostgreSQL passed.
+- Live private storage upload/download verified; anonymous public download denied. Synthetic original/review images survived container replacement with matching SHA-256 checksums; public health returned OK afterward.
+- Three existing ready assessment records had no local scans/evidence to migrate; their historical images remain unavailable.
+
 ## 2026-10-22
 
 ### Added

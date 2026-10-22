@@ -103,6 +103,7 @@ class GoogleLoginTests(unittest.TestCase):
             with sqlite3.connect(str(Path(old)/'school.sqlite')) as db:
                 db.execute('CREATE TABLE users(id TEXT PRIMARY KEY,email TEXT UNIQUE NOT NULL,password TEXT NOT NULL)')
                 db.execute('INSERT INTO users VALUES(?,?,?)',('legacy','legacy@deliahw2.edu.hk','old-hash'))
+            db.close()
             initialize(old)
             with connect(old) as db:
                 user=db.execute('SELECT * FROM users').fetchone()
