@@ -1,10 +1,11 @@
 """Google Workspace sign-in, with an explicit approved-teacher list."""
 import secrets
-import sqlite3
 from urllib.parse import urlparse
 
 from flask import abort, redirect, session, url_for
 from authlib.integrations.flask_client import OAuth
+
+from .database import begin_write,locked,INTEGRITY_ERRORS
 
 DOMAIN = 'delia.edu.hk'
 
@@ -50,15 +51,15 @@ def register_google(app, connect, data):
         if claims.get('email_verified') is not True or claims.get('hd')!=DOMAIN or email.rsplit('@',1)[-1]!=DOMAIN or email.count('@')!=1:
             abort(403,'Use your verified @delia.edu.hk Google Workspace account.')
         with connect(data) as db:
-            db.execute('BEGIN IMMEDIATE')
-            user=db.execute('SELECT * FROM users WHERE email=?',(email,)).fetchone()
+            begin_write(db)
+            user=locked(db,'SELECT * FROM users WHERE email=?',(email,)).fetchone()
             if not user or not user['enabled']:
                 abort(403,'This account is not on the approved teacher list. Contact the administrator.')
             if user['google_sub'] and user['google_sub']!=subject:
                 abort(403,'This teacher account is linked to a different Google identity. Contact the administrator.')
             try:
                 db.execute('UPDATE users SET google_sub=? WHERE id=?',(subject,user['id']))
-            except sqlite3.IntegrityError:
+            except INTEGRITY_ERRORS:
                 abort(403,'This Google identity is already linked to another account.')
         # Retain no Google access, refresh, or ID tokens in cookies or the database.
         session.clear()

@@ -7,7 +7,6 @@ import json
 import logging
 import os
 import secrets
-import sqlite3
 import threading
 import time
 import uuid
@@ -19,35 +18,11 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 from .core import export, grade, validate
 from .review import refresh_review
+from .database import connect,initialize,begin_write,locked,next_queued,INTEGRITY_ERRORS
 
 ROOT = Path(__file__).resolve().parents[1]
 FIELDS = ['name','signature','class','student_id','subject_paper']
 ALLOWED = {'.pdf','.png','.jpg','.jpeg','.tif','.tiff','.bmp'}
-
-
-def connect(data):
-    db = sqlite3.connect(str(Path(data)/'school.sqlite'), timeout=30)
-    db.row_factory = sqlite3.Row
-    db.execute('PRAGMA foreign_keys=ON')
-    return db
-
-
-def initialize(data):
-    Path(data).mkdir(parents=True,exist_ok=True,mode=0o700)
-    with connect(data) as db:
-        db.execute('PRAGMA journal_mode=WAL')
-        db.executescript('''
-        CREATE TABLE IF NOT EXISTS users(id TEXT PRIMARY KEY, email TEXT UNIQUE NOT NULL, password TEXT NOT NULL);
-        CREATE TABLE IF NOT EXISTS jobs(id TEXT PRIMARY KEY, owner TEXT NOT NULL REFERENCES users(id), title TEXT NOT NULL,
-            subject TEXT NOT NULL, level TEXT NOT NULL, state TEXT NOT NULL, created REAL NOT NULL, updated REAL NOT NULL,
-            config TEXT NOT NULL, results TEXT NOT NULL DEFAULT '[]', error TEXT NOT NULL DEFAULT '', finalized INTEGER NOT NULL DEFAULT 0);
-        CREATE TABLE IF NOT EXISTS audit(id INTEGER PRIMARY KEY AUTOINCREMENT, job TEXT NOT NULL REFERENCES jobs(id),
-            actor TEXT NOT NULL REFERENCES users(id), at REAL NOT NULL, action TEXT NOT NULL, detail TEXT NOT NULL);
-        ''')
-        columns={row['name'] for row in db.execute('PRAGMA table_info(users)')}
-        if 'google_sub' not in columns: db.execute('ALTER TABLE users ADD COLUMN google_sub TEXT')
-        if 'enabled' not in columns: db.execute('ALTER TABLE users ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1')
-        db.execute('CREATE UNIQUE INDEX IF NOT EXISTS users_google_sub ON users(google_sub)')
 
 
 def create_app(data=None, testing=False, start_worker=True):
@@ -253,8 +228,8 @@ def create_app(data=None, testing=False, start_worker=True):
     def review(jid,index):
         owned(jid)
         with connect(data) as db:
-            db.execute('BEGIN IMMEDIATE')
-            job=dict(db.execute('SELECT * FROM jobs WHERE id=? AND owner=?',(jid,session['user'])).fetchone())
+            begin_write(db)
+            job=dict(locked(db,'SELECT * FROM jobs WHERE id=? AND owner=?',(jid,session['user'])).fetchone())
             if job['state']!='ready' or job['finalized']: abort(409,'Assessment is not open for review.')
             # Reject stale forms from another tab or teacher session.
             if request.form.get('version')!=str(job['updated']): abort(409,'Results changed. Reload before saving.')
@@ -300,8 +275,8 @@ def create_app(data=None, testing=False, start_worker=True):
     def finalize(jid):
         owned(jid)
         with connect(data) as db:
-            db.execute('BEGIN IMMEDIATE')
-            job=dict(db.execute('SELECT * FROM jobs WHERE id=?',(jid,)).fetchone())
+            begin_write(db)
+            job=dict(locked(db,'SELECT * FROM jobs WHERE id=?',(jid,)).fetchone())
             rows=json.loads(job['results'])
             if job['state']!='ready' or not rows or any(r.get('review_required') for r in rows):
                 abort(409,'Resolve every answer and identity review before finalizing.')
@@ -396,8 +371,8 @@ def worker(data):
     while True:
         try:
             with connect(data) as db:
-                db.execute('BEGIN IMMEDIATE')
-                job=db.execute("SELECT * FROM jobs WHERE state='queued' ORDER BY created LIMIT 1").fetchone()
+                begin_write(db)
+                job=next_queued(db)
                 if job:
                     db.execute("UPDATE jobs SET state='processing',updated=? WHERE id=?",(time.time(),job['id']))
             if job: process_job(data,dict(job))
@@ -432,7 +407,7 @@ def main():
         if '@' not in email or len(password)<12: parser.error('Use a valid email and a password of at least 12 characters.')
         with connect(args.data) as db:
             try: db.execute('INSERT INTO users(id,email,password) VALUES(?,?,?)',(uuid.uuid4().hex,email,generate_password_hash(password,method='pbkdf2:sha256:1000000')))
-            except sqlite3.IntegrityError: parser.error('That account already exists.')
+            except INTEGRITY_ERRORS: parser.error('That account already exists.')
         print('Teacher account created.')
     else:
         from waitress import serve

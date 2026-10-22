@@ -2,7 +2,9 @@
 
 ## Current architecture
 
-Browser → Flask/Waitress → SQLite + private local files → one background processing thread.
+Browser → Flask/Waitress → Supabase PostgreSQL (or SQLite for development) + private files → one background processing thread.
+
+See [Supabase setup](SUPABASE.md) for the PostgreSQL migration and connection configuration. Hosted provisioning is separate from committing this code.
 
 Each teacher owns their assessments. The administrator approves school Google accounts using the CLI; see [Google Workspace setup](GOOGLE_LOGIN.md). The job queue survives service restarts; processing jobs interrupted by a restart become failed and can be retried. Database results are authoritative, and exports are generated from a database snapshot. Uploaded originals and raw OCR/mark evidence remain available on the server. Review decisions record actor, time, previous values and confirmed values. Finalization locks results.
 
@@ -24,7 +26,7 @@ Uploaded PDFs/images are parsed within the service process. This pilot validates
 
 1. Administrator UI for the Google teacher allowlist, and explicit sharing/department roles. Google login and CLI access revocation are implemented.
 2. Roster import, identity reconciliation, duplicate resolution workflow and assessment-level permissions.
-3. PostgreSQL, private object storage and an independently supervised durable queue/worker service; bounded concurrency and retry/idempotency controls.
+3. Private object storage and an independently supervised durable queue/worker service; bounded concurrency and retry/idempotency controls. PostgreSQL connectivity and a backend-only Supabase schema are implemented.
 4. A supported archive/delete workflow with retention schedules, backup restoration checks and operational monitoring.
 5. Benchmarking against teacher-reviewed real scans, template versioning, processing-version records and regression fixtures with consented/anonymized material.
 6. Optional vision-model assistance for difficult handwriting/corrections only after the school approves its data flow. Suggestions should remain distinct from teacher-confirmed decisions.

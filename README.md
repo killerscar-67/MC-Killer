@@ -50,7 +50,7 @@ This is a **single-server pilot**, not a completed school-wide production deploy
 - Uploaded contents are opened and validated, not accepted solely by extension. Encrypted PDFs and oversized page/image dimensions are rejected.
 - Private assessment access is enforced for pages, review mutations, images and exports.
 - CSRF tokens, session rotation, HTTP-only cookies, login throttling and a restrictive content policy are included. Use HTTPS and `MCK_HTTPS=1` for deployment.
-- SQLite persists the queue, results and audit history. Restart-interrupted jobs are marked failed for explicit retry. A partly failed batch cannot be finalized.
+- PostgreSQL or SQLite persists the queue, results and audit history. Restart-interrupted jobs are marked failed for explicit retry. A partly failed batch cannot be finalized.
 - Optimistic version checks prevent stale review forms from overwriting newer decisions.
 - Finalization blocks unresolved answer/metadata/duplicate-identity flags and locks editing.
 - Logs and results can contain student information: keep them inside the school's controlled environment.
@@ -74,4 +74,7 @@ Tests cover scoring, exports, template registration, all 400 empty boxes, pen/cr
 
 The backend is `mcmark/web.py` (Flask/Waitress), with `mcmark/google_login.py` for school sign-in and the `mcmark/` processing modules. The frontend templates and static files are served by the same application.
 
-SQLite lives at `<MCK_DATA_DIR>/school.sqlite`; the default local directory is `instance/`, and the Docker instructions use `/data/school.sqlite` on the persistent volume. Original scans and review evidence live under `<MCK_DATA_DIR>/batches/`. These are runtime files, excluded from Git. The GitHub repository contains the application, not a running server or online database. No hosting or cloud database has been provisioned yet.
+With `MCK_DATABASE_URL`, the app uses Supabase PostgreSQL in a private `mc_killer` schema. Without it, SQLite lives at `<MCK_DATA_DIR>/school.sqlite`; the default local directory is `instance/`, and the Docker instructions use `/data/school.sqlite` on the persistent volume. Original scans and review evidence live under `<MCK_DATA_DIR>/batches/`. These are runtime files, excluded from Git. The GitHub repository contains the application, not a running server or online database. No hosting or cloud database has been provisioned yet.
+
+
+For Supabase setup, see [PostgreSQL deployment](docs/SUPABASE.md). The database migration is prepared in `supabase/migrations/`; committing it does not create a hosted project. No existing SQLite/student data is uploaded automatically. Scans still require persistent local storage until the private object-storage integration is implemented.

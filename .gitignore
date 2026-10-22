@@ -8,3 +8,5 @@ tmp/
 .DS_Store
 examples/sample-input/
 examples/blank-sheet.png
+supabase/.temp/
+supabase/.branches/
