@@ -1,6 +1,6 @@
 # Delia Google Workspace login
 
-The default production login is Google OpenID Connect, restricted to verified `@delia.edu.hk` Workspace identities **and an approved teacher list**. A matching email suffix alone does not grant access. Student accounts sharing the school domain are denied unless explicitly approved.
+The default production login is Google OpenID Connect, restricted to verified `@deliahw2.edu.hk` Workspace identities **and an approved teacher list**. A matching email suffix alone does not grant access. Student accounts sharing the school domain are denied unless explicitly approved.
 
 ## Configure with school IT
 
@@ -12,21 +12,21 @@ The default production login is Google OpenID Connect, restricted to verified `@
 6. Approve teachers on the server, using the same `--data` directory as the service:
 
 ```sh
-python -m mcmark.web authorize-teacher --data /data --email teacher@delia.edu.hk
+python -m mcmark.web authorize-teacher --data /data --email teacher@deliahw2.edu.hk
 python -m mcmark.web serve --data /data --host 0.0.0.0 --port 8000
 ```
 
 To revoke access:
 
 ```sh
-python -m mcmark.web revoke-teacher --data /data --email teacher@delia.edu.hk
+python -m mcmark.web revoke-teacher --data /data --email teacher@deliahw2.edu.hk
 ```
 
 Revocation is checked on protected requests, including active browser sessions. Teacher accounts are bound to Google's stable subject identifier after their first successful sign-in. A changed identity cannot silently take over an existing account. Existing database files are migrated in place to add the identity and enabled-state columns; back up the data directory before upgrades.
 
 ## What the application checks
 
-Authlib handles the authorization-code flow with state, nonce, PKCE and validation of the Google-signed ID token. The application additionally requires `email_verified=true`, `hd=delia.edu.hk`, the exact school email domain, and an enabled approved-teacher record. The `hd` authorization request parameter is a Google account-picker hint, not the access-control check.
+Authlib handles the authorization-code flow with state, nonce, PKCE and validation of the Google-signed ID token. The application additionally requires `email_verified=true`, `hd=deliahw2.edu.hk`, the exact school email domain, and an enabled approved-teacher record. The `hd` authorization request parameter is a Google account-picker hint, not the access-control check.
 
 Only `openid email profile` scopes are requested. The app does not request Gmail, Drive, or Contacts access, and retains no Google access/refresh/ID tokens in browser sessions or the database. It stores the teacher email and stable Google subject. Provider error details and tokens are not logged by the login routes.
 

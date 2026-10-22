@@ -393,7 +393,7 @@ def main():
     initialize(args.data)
     if args.command in ('authorize-teacher','revoke-teacher'):
         email=(args.email or input('Teacher email: ')).strip().lower()
-        if email.count('@')!=1 or not email.endswith('@delia.edu.hk'): parser.error('Use an @delia.edu.hk teacher email.')
+        if email.count('@')!=1 or not email.endswith('@deliahw2.edu.hk'): parser.error('Use an @deliahw2.edu.hk teacher email.')
         with connect(args.data) as db:
             if args.command=='authorize-teacher':
                 db.execute('INSERT INTO users(id,email,password) VALUES(?,?,?) ON CONFLICT(email) DO UPDATE SET enabled=1',(uuid.uuid4().hex,email,''))

@@ -10,7 +10,7 @@ class DatabaseAdapterTests(unittest.TestCase):
         db=PostgresConnection(raw)
         db.execute('SELECT * FROM jobs WHERE owner=?',("teacher's ? input",))
         raw.execute.assert_called_once_with('SELECT * FROM jobs WHERE owner=%s',("teacher's ? input",))
-        row=Record(id='id1',email='teacher@delia.edu.hk')
+        row=Record(id='id1',email='teacher@deliahw2.edu.hk')
         self.assertEqual(row[0],row['id'])
         self.assertEqual(row[1],row['email'])
 

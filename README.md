@@ -4,7 +4,7 @@ A teacher workspace for scanning, marking and reviewing multiple-choice answer s
 
 ## Teacher workflow
 
-1. Sign in with an approved `@delia.edu.hk` Google Workspace account.
+1. Sign in with an approved `@deliahw2.edu.hk` Google Workspace account.
 2. Create an assessment: title, subject, level, 1–100 questions, answer sequence, wrong-answer deduction, and passing percentage.
 3. Upload upright PDF or image scans, including a whole class in one multipage PDF.
 4. Return to the assessment after background processing completes.
@@ -21,7 +21,7 @@ Python 3.9+; Python 3.12 is used in the deployment image and CI.
 ```sh
 python3 -m venv .venv
 .venv/bin/pip install .
-.venv/bin/python -m mcmark.web authorize-teacher --email teacher@delia.edu.hk
+.venv/bin/python -m mcmark.web authorize-teacher --email teacher@deliahw2.edu.hk
 export MCK_SECRET_KEY='replace-with-a-long-random-secret'
 # Configure MCK_GOOGLE_CLIENT_ID, MCK_GOOGLE_CLIENT_SECRET and MCK_GOOGLE_REDIRECT_URI
 # See docs/GOOGLE_LOGIN.md; for local HTTP use MCK_HTTPS=0.
@@ -36,7 +36,7 @@ On Linux, install Tesseract and appropriate language data. On macOS, the automat
 
 ```sh
 docker build -t mc-killer .
-docker run --rm -it -v mc-killer-data:/data mc-killer authorize-teacher --data /data --email teacher@delia.edu.hk
+docker run --rm -it -v mc-killer-data:/data mc-killer authorize-teacher --data /data --email teacher@deliahw2.edu.hk
 docker run --rm -p 127.0.0.1:8000:8000 -v mc-killer-data:/data --env-file /secure/path/mc-killer.env mc-killer serve --host 0.0.0.0 --data /data --port 8000
 ```
 

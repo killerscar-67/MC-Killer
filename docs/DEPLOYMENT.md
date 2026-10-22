@@ -14,7 +14,7 @@ The image processor uses OpenCV/PyMuPDF with Tesseract or macOS Vision OCR. No e
 
 - Run one application process against one data directory; multiple Waitress processes and multiple containers sharing this SQLite directory are not supported. The in-process login limiter and startup job recovery assume a single process.
 - Configure a stable secret, an HTTPS reverse proxy, secure cookies and a private persistent volume. Do not expose the development preview or its test account.
-- Approve individual @delia.edu.hk teacher accounts, configure school Google OAuth and restrict server/filesystem access to designated administrators.
+- Approve individual @deliahw2.edu.hk teacher accounts, configure school Google OAuth and restrict server/filesystem access to designated administrators.
 - Agree on who can access scans and how long scans, results, backups and audit history should be retained. This release has no automated deletion interface; administrators must manage retention carefully and remove database/file records together.
 - Monitor processing failures, disk space and backups. Review server logs for failed batches; the UI intentionally does not expose internal paths or exception details.
 - Test backup restoration and teacher account procedures before relying on the system for live marks.

@@ -15,13 +15,13 @@ class GoogleLoginTests(unittest.TestCase):
         self.client=self.app.test_client()
         self.google=self.app.extensions['mck_google']
         with connect(self.tmp.name) as db:
-            db.execute('INSERT INTO users(id,email,password) VALUES(?,?,?)',('teacher','teacher@delia.edu.hk',''))
+            db.execute('INSERT INTO users(id,email,password) VALUES(?,?,?)',('teacher','teacher@deliahw2.edu.hk',''))
 
     def tearDown(self):
         self.env.stop();self.tmp.cleanup()
 
     def claims(self,**changes):
-        return {'sub':'google-sub-123','email':'teacher@delia.edu.hk','email_verified':True,'hd':'delia.edu.hk',**changes}
+        return {'sub':'google-sub-123','email':'teacher@deliahw2.edu.hk','email_verified':True,'hd':'deliahw2.edu.hk',**changes}
 
     def callback(self,claims,**token):
         with patch.object(self.google,'authorize_access_token',return_value={'id_token':'validated-by-library','userinfo':claims,**token}):
@@ -39,13 +39,13 @@ class GoogleLoginTests(unittest.TestCase):
             self.assertEqual(db.execute('SELECT google_sub FROM users WHERE id=?',('teacher',)).fetchone()[0],'google-sub-123')
 
     def test_rejects_personal_accounts_spoofed_domains_and_unverified_email(self):
-        for changes in [{'hd':None},{'hd':'other.edu.hk'},{'email':'teacher@gmail.com'},{'email':'teacher@delia.edu.hk.evil.test'},{'email_verified':False},{'email_verified':'true'},{'sub':''}]:
+        for changes in [{'hd':'delia.edu.hk','email':'teacher@delia.edu.hk'},{'hd':None},{'hd':'other.edu.hk'},{'email':'teacher@gmail.com'},{'email':'teacher@deliahw2.edu.hk.evil.test'},{'email_verified':False},{'email_verified':'true'},{'sub':''}]:
             with self.subTest(changes=changes):
                 self.assertEqual(self.callback(self.claims(**changes)).status_code,403)
         self.assertEqual(self.callback(self.claims(),id_token=None).status_code,403)
 
     def test_domain_members_are_not_automatically_authorized(self):
-        self.assertEqual(self.callback(self.claims(email='student@delia.edu.hk')).status_code,403)
+        self.assertEqual(self.callback(self.claims(email='student@deliahw2.edu.hk')).status_code,403)
         with connect(self.tmp.name) as db: db.execute('UPDATE users SET enabled=0 WHERE id=?',('teacher',))
         self.assertEqual(self.callback(self.claims()).status_code,403)
 
@@ -60,7 +60,7 @@ class GoogleLoginTests(unittest.TestCase):
         self.assertIn(b'Sign in with Google',page.data)
         self.assertNotIn(b'name="password"',page.data)
         with self.client.session_transaction() as session: csrf=session['csrf']
-        self.assertEqual(self.client.post('/login',data={'csrf':csrf,'email':'teacher@delia.edu.hk','password':'anything'}).status_code,405)
+        self.assertEqual(self.client.post('/login',data={'csrf':csrf,'email':'teacher@deliahw2.edu.hk','password':'anything'}).status_code,405)
         with self.client.session_transaction() as session: session.update(user='teacher',auth_method='password')
         self.assertEqual(self.client.get('/').status_code,302)
 
@@ -91,7 +91,7 @@ class GoogleLoginTests(unittest.TestCase):
             response=self.client.get('/auth/google')
         self.assertEqual(response.status_code,302)
         query=parse_qs(urlparse(response.headers['Location']).query)
-        self.assertEqual(query['hd'],['delia.edu.hk'])
+        self.assertEqual(query['hd'],['deliahw2.edu.hk'])
         self.assertEqual(query['code_challenge_method'],['S256'])
         self.assertEqual(query['redirect_uri'],['https://marking.school.test/auth/google/callback'])
         self.assertTrue(query.get('nonce'))
@@ -102,7 +102,7 @@ class GoogleLoginTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as old:
             with sqlite3.connect(str(Path(old)/'school.sqlite')) as db:
                 db.execute('CREATE TABLE users(id TEXT PRIMARY KEY,email TEXT UNIQUE NOT NULL,password TEXT NOT NULL)')
-                db.execute('INSERT INTO users VALUES(?,?,?)',('legacy','legacy@delia.edu.hk','old-hash'))
+                db.execute('INSERT INTO users VALUES(?,?,?)',('legacy','legacy@deliahw2.edu.hk','old-hash'))
             initialize(old)
             with connect(old) as db:
                 user=db.execute('SELECT * FROM users').fetchone()

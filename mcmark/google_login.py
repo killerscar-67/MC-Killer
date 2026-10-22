@@ -7,7 +7,7 @@ from authlib.integrations.flask_client import OAuth
 
 from .database import begin_write,locked,INTEGRITY_ERRORS
 
-DOMAIN = 'delia.edu.hk'
+DOMAIN = 'deliahw2.edu.hk'
 
 
 def register_google(app, connect, data):
@@ -49,7 +49,7 @@ def register_google(app, connect, data):
             abort(403,'Google did not return a verified school identity.')
         email=email.strip().lower()
         if claims.get('email_verified') is not True or claims.get('hd')!=DOMAIN or email.rsplit('@',1)[-1]!=DOMAIN or email.count('@')!=1:
-            abort(403,'Use your verified @delia.edu.hk Google Workspace account.')
+            abort(403,'Use your verified @deliahw2.edu.hk Google Workspace account.')
         with connect(data) as db:
             begin_write(db)
             user=locked(db,'SELECT * FROM users WHERE email=?',(email,)).fetchone()
