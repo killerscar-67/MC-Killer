@@ -1,3 +1,68 @@
 # MC-Killer
 
-School MCQ marking pilot. Development is being prepared on a feature branch. Student scans and processing results are excluded from this repository.
+A teacher workspace for scanning, marking and reviewing multiple-choice answer sheets. This first release supports the Delia 100-question A–D sheet, using only the questions in each assessment's answer key.
+
+## Teacher workflow
+
+1. Sign in using an account created by the school administrator.
+2. Create an assessment: title, subject, level, 1–100 questions, answer sequence, wrong-answer deduction, and passing percentage.
+3. Upload upright PDF or image scans, including a whole class in one multipage PDF.
+4. Return to the assessment after background processing completes.
+5. Review flagged question images and all five written fields: name, signature, class, class number, subject/paper.
+6. Save teacher decisions. Scores and class/item statistics are recalculated; original readings and an audit trail remain available.
+7. Resolve every flag, finalize to lock results, and download CSV or full evidence JSON.
+
+Dark ballpoint and pencil fills use the same optical-density detector. Crosses, partial marks, faint traces, blanks and multiple selections are flagged conservatively. Crossed-out choices are never discarded automatically. Teacher decisions can confirm one choice, multiple choices or a blank.
+
+## Run locally
+
+Python 3.9+; Python 3.12 is used in the deployment image and CI.
+
+```sh
+python3 -m venv .venv
+.venv/bin/pip install .
+.venv/bin/python -m mcmark.web create-user --email teacher@school.example
+export MCK_SECRET_KEY='replace-with-a-long-random-secret'
+.venv/bin/python -m mcmark.web serve --port 8000
+```
+
+Open http://127.0.0.1:8000. The server uses Waitress and starts one background worker. Keep one service process per data directory. Accounts, job state, raw files and results live in ignored `instance/` by default. Set `MCK_DATA_DIR` to an absolute private directory for a persistent deployment. A secret is mandatory; generate it with a password manager or `python3 -c 'import secrets; print(secrets.token_hex(32))'` and retain it across restarts. Passwords are entered interactively and hashed; no default account exists.
+
+On Linux, install Tesseract and appropriate language data. On macOS, the automatic OCR backend uses Tesseract when available, otherwise local Apple Vision with Swift command line tools. Handwriting and signatures are best-effort. Low-confidence or empty readings retain their image crops and require teacher review. A readable but incorrect class number cannot be detected without external roster validation; teachers can correct it using the other written fields.
+
+## Docker pilot
+
+```sh
+docker build -t mc-killer .
+docker run --rm -it -v mc-killer-data:/data mc-killer create-user --data /data --email teacher@school.example
+docker run --rm -p 127.0.0.1:8000:8000 -v mc-killer-data:/data --env-file /secure/path/mc-killer.env mc-killer serve --host 0.0.0.0 --data /data --port 8000
+```
+
+The environment file contains `MCK_SECRET_KEY` and, when served through HTTPS, `MCK_HTTPS=1`. Put a school-managed HTTPS reverse proxy in front of the service. The container runs as a non-root user. `/healthz` checks service/database availability without exposing assessment data. Back up the entire persistent data directory consistently, including the SQLite database and associated files.
+
+This is a **single-server pilot**, not a completed school-wide production deployment. It is not published on the internet by this repository. See [deployment and next steps](docs/DEPLOYMENT.md) before exposing it to teachers.
+
+## Processing and data
+
+- Up to 100 files, 200 pages and 50 MB per upload batch; PDFs, PNG, JPEG, TIFF and BMP.
+- Uploaded contents are opened and validated, not accepted solely by extension. Encrypted PDFs and oversized page/image dimensions are rejected.
+- Private assessment access is enforced for pages, review mutations, images and exports.
+- CSRF tokens, session rotation, HTTP-only cookies, login throttling and a restrictive content policy are included. Use HTTPS and `MCK_HTTPS=1` for deployment.
+- SQLite persists the queue, results and audit history. Restart-interrupted jobs are marked failed for explicit retry. A partly failed batch cannot be finalized.
+- Optimistic version checks prevent stale review forms from overwriting newer decisions.
+- Finalization blocks unresolved answer/metadata/duplicate-identity flags and locks editing.
+- Logs and results can contain student information: keep them inside the school's controlled environment.
+
+Student exports contain marks, percentages, raw response statuses and review status. Class exports include mean, median, minimum, maximum, population standard deviation and pass/fail statistics. Item exports include facility, distractor frequencies, blanks, multiple marks and pending-review counts. Multiple-response option counts include each selected option; percentages may sum above 100%. Pending readings remain in provisional statistics until resolved.
+
+## CLI and tests
+
+```sh
+.venv/bin/python -m unittest discover -s tests -v
+.venv/bin/python examples/generate.py
+.venv/bin/python -m mcmark.cli examples/sample-input --config examples/layout.json --output output/demo
+```
+
+For the Delia sheet, use `mcmark/layouts/delia-layout.json` and `--key answers.json`, where the key is a JSON object such as `{"1":"A","2":"B"}`. Only listed questions are processed. The CLI also supports teacher decisions through `--corrections review_queue.csv`. Its original configuration supports per-question weights and separate correct/wrong/blank/multiple marks; the web pilot exposes the common +1/0 scheme with configurable wrong-answer deduction.
+
+Tests cover scoring, exports, template registration, all 400 empty boxes, pen/cross-out clues, OCR failure evidence, account isolation, upload validation, review recalculation, metadata corrections, stale forms, finalization, worker state and restart handling. Synthetic fixtures are generated locally. Real student scans, names, results, databases, passwords and secrets are not included.
