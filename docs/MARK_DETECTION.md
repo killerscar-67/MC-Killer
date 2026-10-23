@@ -24,3 +24,13 @@ A mark exactly overlapping existing printed ink may leave no detectable new ink.
 A read-only comparison used saved question crops and saved teacher decisions from the pilot. It recovered thin responses on one sheet (including Q2, Q4, Q6, Q11, Q14 and Q19), but the first draft proposed multiple extra options on another sheet. This falsified the assumption that synthetic blank-template tests alone established adequate suppression of real scan artefacts. The candidate now uses a wider printed-ink halo and local contrast limit, and only promotes a unique weak candidate. Multiple weak candidates remain ambiguous and do not override the density reading. This refinement still requires a completed real-crop rerun; do not deploy based on the initial synthetic pass.
 
 The first original-PDF diagnostic exited with code 9 and the host restarted once, consistent with memory pressure while diagnostics shared the 512 MB live container. Health subsequently returned OK. Avoid full-document comparison alongside the live web process; use saved crops or an isolated worker. The crop comparison does not mutate jobs or teacher decisions. No student images are committed.
+
+## 23 October: locally supplied thin-stroke scan
+
+The user confirmed Q1-10 as A B C D A B B D C B, with Q11-100 blank. The live main detector returned blanks for all first ten. The initial draft also missed border strokes and produced a wrong Q9 candidate. The question sampling strip is only four pixels high; per-row matching found residual offsets of 1-4 pixels after global homography.
+
+Added bounded per-row template registration using a small ROI rather than warping/copying a full page per question. Low match score or a best match at the search boundary disables weak-candidate promotion and requires alignment review. A one-pixel printed-ink halo is retained after reliable row alignment.
+
+On the supplied scan after this refinement: all 10 marked answers match the user-confirmed labels; none of the 90 blank questions receives a selected option. Marked rows remain provisional for review. This scan was used for tuning and is NOT a held-out accuracy evaluation. It does not validate real cancellation marks. The local baseline/candidate run, including PDF rendering and global alignment but excluding OCR, took approximately 0.30 seconds and peaked at 128.4 MB RSS on the developer Mac. This is not a host capacity measurement.
+
+The scan, identity fields, crops and detailed readings stay local and are excluded from Git. Independent labelled cancellation sheets and full-process memory/throughput checks remain release requirements.

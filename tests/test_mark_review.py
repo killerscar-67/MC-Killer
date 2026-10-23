@@ -158,3 +158,26 @@ class MarkReviewTests(unittest.TestCase):
         self.assertEqual(len(result['thin_candidates']),4)
         self.assertIn('ambiguous_thin_marks',result['review_reasons'])
         self.assertIsNone(result['suggested_selected'])
+
+    def test_local_row_alignment_recovers_shifted_thin_mark(self):
+        from mcmark.vision import detect
+        import numpy as np
+        sheet=self.blank.copy();x,y=map(round,self.q['centers'][0])
+        self.cv2.line(sheet,(x-5,y),(x+5,y),30,1)
+        shifted=self.cv2.warpAffine(sheet,np.float32([[1,0,2],[0,1,-3]]),
+                                    (sheet.shape[1],sheet.shape[0]),borderValue=255)
+        result=detect(shifted,self.q,self.config)
+        self.assertEqual(result['selected'],['A'])
+        self.assertEqual(result['local_offset'],[2,-3])
+        self.assertIn('thin_stroke_candidate',result['review_reasons'])
+
+    def test_failed_local_registration_suppresses_weak_candidates(self):
+        from mcmark.vision import detect
+        from unittest.mock import patch
+        import numpy as np
+        sheet=self.blank.copy();x,y=map(round,self.q['centers'][0])
+        self.cv2.line(sheet,(x-5,y),(x+5,y),30,1)
+        with patch('mcmark.vision.cv2.matchTemplate',return_value=np.zeros((11,11),np.float32)):
+            result=detect(sheet,self.q,self.config)
+        self.assertEqual(result['selected'],[])
+        self.assertIn('uncertain_local_alignment',result['review_reasons'])

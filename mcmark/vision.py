@@ -47,7 +47,7 @@ def stroke_features(gray, template, grid, center, config):
     patch = gray[top:bottom,left:right]
     ref = template[top:bottom,left:right]
     # Ignore printed ink and its one-pixel registration halo.
-    printed = cv2.dilate((ref < 200).astype(np.uint8),np.ones((5,5),np.uint8))
+    printed = cv2.dilate((ref < 200).astype(np.uint8),np.ones((3,3),np.uint8))
     foreground_limit=min(200,float(np.percentile(patch,90))-30)
     ink = ((ref.astype(np.int16)-patch.astype(np.int16)>40) & (patch<foreground_limit) & (printed==0)).astype(np.uint8)
     yy,xx=np.ogrid[top:bottom,left:right]
@@ -122,7 +122,7 @@ def align(gray, config):
     w,h = config['page_size']
     scaled = cv2.resize(gray, (w,h))
     if config.get('template_image'):
-        template = load_template(config['template_image'])
+        template = config['_template_array'] if '_template_array' in config else load_template(config['template_image'])
         if template is None or template.shape != (h, w):
             raise ValueError('Template image missing or has incorrect dimensions')
         orb = cv2.ORB_create(nfeatures=7000)
@@ -170,6 +170,26 @@ def align(gray, config):
 
 
 def detect(gray, grid, config):
+    # Global homography can leave a few pixels of local drift. Register each
+    # printed question row before sampling a four-pixel-high box interior.
+    if grid.get('sample_box') and config.get('template_image') and not config.get('_local_aligned'):
+        reference=load_template(config['template_image'])
+        xs,ys=zip(*grid['centers']);pad=5
+        left=max(pad,int(min(xs))-23);top=max(pad,int(min(ys))-20)
+        right=min(gray.shape[1]-pad,int(max(xs))+24);bottom=min(gray.shape[0]-pad,int(max(ys))+21)
+        target=reference[top:bottom,left:right]
+        window=gray[top-pad:bottom+pad,left-pad:right+pad]
+        match=cv2.matchTemplate(window,target,cv2.TM_CCOEFF_NORMED)
+        _,score,_,position=cv2.minMaxLoc(match);dx,dy=position[0]-pad,position[1]-pad
+        patch=window[position[1]:position[1]+target.shape[0],position[0]:position[0]+target.shape[1]]
+        local_grid={**grid,'centers':[[x-left,y-top] for x,y in grid['centers']]}
+        if score<.45 or abs(dx)==pad or abs(dy)==pad:
+            reading=detect(gray,grid,{**config,'_local_aligned':True,'_disable_strokes':True})
+            reading['review_reasons'].append('uncertain_local_alignment')
+        else:
+            reading=detect(patch,local_grid,{**config,'_local_aligned':True,'_template_array':target})
+        reading['local_offset']=[dx,dy];reading['alignment_score']=float(score)
+        return reading
     radius = grid.get('radius', config.get('radius', 10)) * .65
     densities = {}
     for label,(x,y) in zip(grid['labels'],grid['centers']):
@@ -206,7 +226,7 @@ def detect(gray, grid, config):
         reasons.append('faint_or_partial_mark')
     clues = {}
     if grid.get('sample_box') and config.get('template_image') and config.get('check_surrounding_ink', True):
-        template = load_template(config['template_image'])
+        template = config['_template_array'] if '_template_array' in config else load_template(config['template_image'])
         for label,center in zip(grid['labels'],grid['centers']):
             clue = surrounding_ink(gray,template,grid,center,config)
             clues[label] = clue
@@ -216,8 +236,8 @@ def detect(gray, grid, config):
                 reasons.append('stray_ink_or_cancellation')
     raw_selected=list(selected)
     thin_candidates=[]
-    if grid.get('sample_box') and config.get('template_image'):
-        template=load_template(config['template_image'])
+    if grid.get('sample_box') and config.get('template_image') and not config.get('_disable_strokes'):
+        template=config['_template_array'] if '_template_array' in config else load_template(config['template_image'])
         for label,center in zip(grid['labels'],grid['centers']):
             feature=stroke_features(gray,template,grid,center,config)
             clue=clues.setdefault(label,{})
