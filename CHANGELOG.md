@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Added template-subtracted thin-stroke candidates and compact/dense-fill cross-out clues for boxed marks.
+- Thin strokes are selected provisionally with mandatory review; raw density selections remain preserved.
+- Cancellation remains a teacher-confirmed suggestion. Review displays per-option state and dark coverage, not a correctness confidence.
+- Detector version is stored in each new response; existing assessments and corrections are not reprocessed.
+- Added synthetic tests for thin/faint lines, small Xs, X over fill, single slashes, specks, one-pixel shifts and answer-key independence.
+
 ## 2026-10-23
 
 ### Added
