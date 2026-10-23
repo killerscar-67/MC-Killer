@@ -181,3 +181,27 @@ class MarkReviewTests(unittest.TestCase):
             result=detect(sheet,self.q,self.config)
         self.assertEqual(result['selected'],[])
         self.assertIn('uncertain_local_alignment',result['review_reasons'])
+
+    def test_lone_cross_candidate_is_ambiguous_not_discarded(self):
+        from mcmark.vision import detect
+        sheet=self.blank.copy();x,y=map(round,self.q['centers'][0])
+        self.cv2.line(sheet,(x-7,y-6),(x+7,y+6),0,1)
+        self.cv2.line(sheet,(x-7,y+6),(x+7,y-6),0,1)
+        result=detect(sheet,self.q,self.config)
+        self.assertEqual(result['selected'],['A'])
+        self.assertEqual(result['mark_clues']['A']['state'],'ambiguous')
+        self.assertIn('possible_cross_out',result['review_reasons'])
+        self.assertIsNone(result['suggested_selected'])
+
+    def test_registration_retries_without_relaxing_geometry(self):
+        from mcmark.vision import align
+        from unittest.mock import patch
+        original=self.cv2.findHomography
+        calls=[]
+        def fail_first(*args,**kwargs):
+            calls.append(1)
+            return (None,None) if len(calls)==1 else original(*args,**kwargs)
+        with patch('mcmark.vision.cv2.findHomography',side_effect=fail_first):
+            result=align(self.blank,self.config)
+        self.assertEqual(len(calls),2)
+        self.assertEqual(result.shape,self.blank.shape)

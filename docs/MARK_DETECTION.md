@@ -34,3 +34,11 @@ Added bounded per-row template registration using a small ROI rather than warpin
 On the supplied scan after this refinement: all 10 marked answers match the user-confirmed labels; none of the 90 blank questions receives a selected option. Marked rows remain provisional for review. This scan was used for tuning and is NOT a held-out accuracy evaluation. It does not validate real cancellation marks. The local baseline/candidate run, including PDF rendering and global alignment but excluding OCR, took approximately 0.30 seconds and peaked at 128.4 MB RSS on the developer Mac. This is not a host capacity measurement.
 
 The scan, identity fields, crops and detailed readings stay local and are excluded from Git. Independent labelled cancellation sheets and full-process memory/throughput checks remain release requirements.
+
+## Second locally supplied scan: registration and cancellation
+
+The user confirmed Q1-10 as C B D D A B C B A A and Q11-100 blank; Q1 A is cancelled and Q6 B is circled emphasis. Before tuning, the candidate and main global registration rejected this page because the RANSAC inliers covered only a shallow header region. A stricter descriptor ratio retry (0.6 after 0.7) obtained page-spanning inliers, retaining all minimum-inlier, coverage and projected-corner checks.
+
+Following the retry and candidate-preservation refinement: Q2-10 selections match all nine confirmed answers. Q1 keeps A+C as provisional raw candidates and suggests C; no automatic cancellation is committed. All 90 blank questions stay unselected. Q2/Q6/Q8 still produce possible-cross flags on loops/emphasis; these are ambiguous rather than final cancellations. Thus this is improved review assistance, not 10/10 automatic final marking. A lone cross-like stroke with no alternative is retained as an ambiguous candidate rather than discarded as blank.
+
+Both supplied pages now serve as development cases. The first page was rechecked after these changes and retains ten matching selections with 90 blank questions unselected. Neither is independent held-out evidence after tuning. Synthetic coverage includes lone-cross ambiguity and registration retry. Current local suite: 51 tests, 50 passed, PostgreSQL skipped locally. Real scans and detailed images remain excluded from Git.

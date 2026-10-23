@@ -131,22 +131,30 @@ def align(gray, config):
         if source_desc is None or target_desc is None:
             raise ValueError('Insufficient features to register sheet')
         pairs = cv2.BFMatcher(cv2.NORM_HAMMING).knnMatch(source_desc, target_desc, k=2)
-        matches = [m for pair in pairs if len(pair) == 2 for m,n in [pair] if m.distance < .7*n.distance]
-        if len(matches) < 20:
-            raise ValueError('Sheet does not match the configured template')
-        source = np.float32([source_keys[m.queryIdx].pt for m in matches])
-        target = np.float32([target_keys[m.trainIdx].pt for m in matches])
-        matrix, inliers = cv2.findHomography(source, target, cv2.RANSAC, 3)
-        if matrix is None or int(inliers.sum()) < 20 or float(inliers.mean()) < .4:
-            raise ValueError('Unreliable template registration; manual review required')
-        matched = target[inliers.ravel().astype(bool)]
-        if np.ptp(matched[:,0]) < w*.35 or np.ptp(matched[:,1]) < h*.35:
-            raise ValueError('Registration features do not cover enough of the sheet')
-        corners = np.float32([[[0,0],[w,0],[w,h],[0,h]]])
-        projected = cv2.perspectiveTransform(corners, matrix)[0]
-        if np.max(np.linalg.norm(projected-corners[0],axis=1)) > min(w,h)*.2:
-            raise ValueError('Sheet rotation/crop exceeds supported registration range')
-        return cv2.warpPerspective(scaled, matrix, (w,h), borderValue=255)
+        # Repeated answer rows can produce a high-inlier homography supported
+        # only by the header. Retry stricter descriptor matches, retaining all
+        # geometric coverage and distortion checks for every hypothesis.
+        failure='Sheet does not match the configured template'
+        for ratio in (.7,.6):
+            matches=[m for pair in pairs if len(pair)==2 for m,n in [pair] if m.distance<ratio*n.distance]
+            if len(matches)<20: continue
+            source=np.float32([source_keys[m.queryIdx].pt for m in matches])
+            target=np.float32([target_keys[m.trainIdx].pt for m in matches])
+            matrix,inliers=cv2.findHomography(source,target,cv2.RANSAC,3)
+            if matrix is None or int(inliers.sum())<20 or float(inliers.mean())<.4:
+                failure='Unreliable template registration; manual review required'
+                continue
+            matched=target[inliers.ravel().astype(bool)]
+            if np.ptp(matched[:,0])<w*.35 or np.ptp(matched[:,1])<h*.35:
+                failure='Registration features do not cover enough of the sheet'
+                continue
+            corners=np.float32([[[0,0],[w,0],[w,h],[0,h]]])
+            projected=cv2.perspectiveTransform(corners,matrix)[0]
+            if np.max(np.linalg.norm(projected-corners[0],axis=1))>min(w,h)*.2:
+                failure='Sheet rotation/crop exceeds supported registration range'
+                continue
+            return cv2.warpPerspective(scaled,matrix,(w,h),borderValue=255)
+        raise ValueError(failure)
     if not config.get('fiducials'):
         return scaled
     _, binary = cv2.threshold(scaled, 0, 255, cv2.THRESH_BINARY_INV+cv2.THRESH_OTSU)
@@ -247,7 +255,7 @@ def detect(gray, grid, config):
                 reasons.append('possible_cross_out')
             elif feature['diagonal_clue']:
                 reasons.append('possible_cancellation_stroke')
-            if label not in selected and feature['thin_candidate'] and not clue['cross_suspected']:
+            if label not in selected and (feature['thin_candidate'] or (clue['cross_suspected'] and feature['new_ink_pixels']>=5)):
                 thin_candidates.append(label)
                 reasons.append('thin_stroke_candidate')
             clue['state']='likely_cancelled' if clue['cross_suspected'] else 'ambiguous' if feature['diagonal_clue'] else 'active_mark' if label in selected else 'ambiguous' if feature['new_ink_pixels'] else 'blank'
@@ -261,6 +269,8 @@ def detect(gray, grid, config):
         if len(selected)>1: reasons.append('multiple')
     crossed = [label for label,clue in clues.items() if clue.get('cross_suspected')]
     remaining = [label for label in selected if label not in crossed]
+    for label in crossed:
+        clues[label]['state']='likely_cancelled' if remaining else 'ambiguous'
     return {'selected':selected, 'raw_selected':raw_selected, 'densities':densities,
             'uncertain':uncertain, 'mark_clues':clues, 'review_reasons':list(dict.fromkeys(reasons)),
             'detector_version':'stroke-v2', 'thin_candidates':thin_candidates,
