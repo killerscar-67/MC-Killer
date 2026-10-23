@@ -1,16 +1,13 @@
 # Changelog
 
-## Unreleased
+## 2026-10-23
 
+### Added
 - Added template-subtracted thin-stroke candidates and compact/dense-fill cross-out clues for boxed marks.
 - Thin strokes are selected provisionally with mandatory review; raw density selections remain preserved.
 - Cancellation remains a teacher-confirmed suggestion. Review displays per-option state and dark coverage, not a correctness confidence.
 - Detector version is stored in each new response; existing assessments and corrections are not reprocessed.
 - Added synthetic tests for thin/faint lines, small Xs, X over fill, single slashes, specks, one-pixel shifts and answer-key independence.
-
-## 2026-10-23
-
-### Added
 - Opt-in private Supabase Storage backend for originals and review evidence, with integrity manifests and restart recovery.
 - Ownership-checked image proxy, relative evidence references, generated upload filenames and required-storage configuration.
 - Storage connectivity check and verified migration command that retains existing local files.
@@ -24,6 +21,16 @@
 - Local suite: 41 tests, 40 passed and disposable PostgreSQL integration skipped locally. GitHub CI including PostgreSQL passed.
 - Live private storage upload/download verified; anonymous public download denied. Synthetic original/review images survived container replacement with matching SHA-256 checksums; public health returned OK afterward.
 - Three existing ready assessment records had no local scans/evidence to migrate; their historical images remain unavailable.
+
+### Mark detection pilot validation
+- PR #3 merged to main (merge commit 4d8a730); live exports confirm detector_version=stroke-v2.
+- Reused three user-labelled 100-question sheets locally: 297 exact selection sets and three correct cancellation suggestions requiring teacher confirmation; all 271 intended blanks remained unselected. The first two sheets were development cases; the third was initially tested without tuning.
+- Live export assessed Q1-10 only: the three matching test sheets had 27 exact selection sets and three correct cancellation suggestions, including the intentional B+C multi-selection.
+- Subsequent teacher review exports preserve previous readings, decisions and recalculated marks. Latest supplied export has all six sheets with review_required=false and score_is_provisional=false. This does not independently confirm the assessment finalization lock.
+- Local detector-only runs took approximately 0.34-0.36 seconds per sheet and about 129 MB peak RSS on the developer machine; these exclude OCR and are not a Northflank capacity benchmark.
+- Handwriting OCR remains Tesseract and performed poorly in the pilot (29 of 30 identity fields initially flagged unrecognized). Teacher identity verification remains necessary.
+- Review workload remains high; full-pipeline memory/throughput, concurrent uploads, broader independent writer samples and prior teacher-crop regression coverage remain outstanding. An earlier diagnostic alongside production exited with code 9 and the container restarted; avoid repeating full-document diagnostics in the live 512 MB container.
+- Student PDFs, identity data and raw result exports are retained locally and are not committed to the public repository.
 
 ## 2026-10-22
 
