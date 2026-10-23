@@ -146,3 +146,15 @@ class MarkReviewTests(unittest.TestCase):
         self.cv2.line(sheet,(x-7,y+6),(x+7,y-6),0,1)
         self.assertEqual(detect(sheet,{**self.q,'answer':'A'},self.config),
                          detect(sheet,{**self.q,'answer':'C'},self.config))
+
+    def test_multiple_weak_strokes_are_not_promoted_to_selections(self):
+        from mcmark.vision import detect
+        sheet=self.blank.copy()
+        for x,y in self.q['centers']:
+            x,y=round(x),round(y)
+            self.cv2.line(sheet,(x-5,y),(x+5,y),30,1)
+        result=detect(sheet,self.q,self.config)
+        self.assertEqual(result['selected'],[])
+        self.assertEqual(len(result['thin_candidates']),4)
+        self.assertIn('ambiguous_thin_marks',result['review_reasons'])
+        self.assertIsNone(result['suggested_selected'])

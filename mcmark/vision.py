@@ -47,8 +47,9 @@ def stroke_features(gray, template, grid, center, config):
     patch = gray[top:bottom,left:right]
     ref = template[top:bottom,left:right]
     # Ignore printed ink and its one-pixel registration halo.
-    printed = cv2.dilate((ref < 200).astype(np.uint8),np.ones((3,3),np.uint8))
-    ink = ((ref.astype(np.int16)-patch.astype(np.int16)>40) & (patch<200) & (printed==0)).astype(np.uint8)
+    printed = cv2.dilate((ref < 200).astype(np.uint8),np.ones((5,5),np.uint8))
+    foreground_limit=min(200,float(np.percentile(patch,90))-30)
+    ink = ((ref.astype(np.int16)-patch.astype(np.int16)>40) & (patch<foreground_limit) & (printed==0)).astype(np.uint8)
     yy,xx=np.ogrid[top:bottom,left:right]
     core=(abs(xx-x)<=bw/2+1)&(abs(yy-y)<=bh/2+2)
     inner=ink*core.astype(np.uint8)
@@ -59,7 +60,7 @@ def stroke_features(gray, template, grid, center, config):
     thin=area>=5 and span>=5
     # Fit opposite diagonals near the centre, rather than demanding both
     # strokes extend far above and below a box. Dense fills alone are not Xs.
-    line_ink=((ref.astype(np.int16)-patch.astype(np.int16)>40)&(patch<200)).astype(np.uint8)*255
+    line_ink=((ref.astype(np.int16)-patch.astype(np.int16)>40)&(patch<foreground_limit)).astype(np.uint8)*255
     lines=cv2.HoughLinesP(line_ink,1,np.pi/180,threshold=4,minLineLength=6,maxLineGap=4)
     outer_ink=line_ink.copy()
     outer_ink[(abs(xx-x)<=bw/2)&(abs(yy-y)<=bh/2+1)]=0
@@ -228,10 +229,14 @@ def detect(gray, grid, config):
                 reasons.append('possible_cancellation_stroke')
             if label not in selected and feature['thin_candidate'] and not clue['cross_suspected']:
                 thin_candidates.append(label)
-                selected.append(label)
                 reasons.append('thin_stroke_candidate')
             clue['state']='likely_cancelled' if clue['cross_suspected'] else 'ambiguous' if feature['diagonal_clue'] else 'active_mark' if label in selected else 'ambiguous' if feature['new_ink_pixels'] else 'blank'
-    if thin_candidates:
+    if len(thin_candidates)==1:
+        selected.append(thin_candidates[0])
+        clues[thin_candidates[0]]['state']='ambiguous' if clues[thin_candidates[0]]['diagonal_clue'] else 'active_mark'
+    elif thin_candidates:
+        reasons.append('ambiguous_thin_marks')
+    if len(thin_candidates)==1:
         reasons=[r for r in reasons if r not in ('blank','multiple')]
         if len(selected)>1: reasons.append('multiple')
     crossed = [label for label,clue in clues.items() if clue.get('cross_suspected')]
@@ -239,7 +244,7 @@ def detect(gray, grid, config):
     return {'selected':selected, 'raw_selected':raw_selected, 'densities':densities,
             'uncertain':uncertain, 'mark_clues':clues, 'review_reasons':list(dict.fromkeys(reasons)),
             'detector_version':'stroke-v2', 'thin_candidates':thin_candidates,
-            'suggested_selected':remaining if (crossed or thin_candidates) and len(remaining)==1 else None}
+            'suggested_selected':remaining if (crossed or len(thin_candidates)==1) and len(remaining)==1 and len(thin_candidates)<=1 else None}
 
 
 
