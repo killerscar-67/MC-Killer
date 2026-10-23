@@ -88,6 +88,25 @@ class TeacherWebTests(unittest.TestCase):
         self.assertEqual(self.client.post(f'/assessments/{jid}/finalize',data={'csrf':self.csrf}).status_code,302)
         self.assertEqual(self.client.post(f'/assessments/{jid}/sheets/0/review',data=form).status_code,409)
 
+    def test_bulk_blank_confirmation_leaves_uncertain_marks_pending(self):
+        jid=self.upload();self.ready(jid)
+        with connect(self.data) as db:
+            job=db.execute('SELECT * FROM jobs WHERE id=?',(jid,)).fetchone()
+            rows=json.loads(job['results'])
+            for a in rows[0]['responses']: a['selected']=[]
+            rows[0]['responses'][0]['review_reasons']=['blank']
+            rows[0]['responses'][1]['review_reasons']=['blank','faint_or_partial_mark']
+            db.execute('UPDATE jobs SET results=? WHERE id=?',(json.dumps(rows),jid))
+            version=str(job['updated'])
+        response=self.client.post(f'/assessments/{jid}/sheets/0/review',data={
+            'csrf':self.csrf,'version':version,'confirm_clean_blanks':'yes'})
+        self.assertEqual(response.status_code,302)
+        with connect(self.data) as db:
+            row=json.loads(db.execute('SELECT results FROM jobs WHERE id=?',(jid,)).fetchone()[0])[0]
+        self.assertEqual(row['responses'][0]['teacher_review']['decision'],[])
+        self.assertNotIn('teacher_review',row['responses'][1])
+        self.assertTrue(row['review_required'])
+
     def test_disguised_and_nonfinite_uploads_rejected(self):
         response=self.client.post('/assessments/new',data={'csrf':self.csrf,'title':'Bad','count':'1','key':'A','wrong':'0','pass':'50','scans':(io.BytesIO(b'not an image'),'scan.png')})
         self.assertEqual(response.status_code,400)

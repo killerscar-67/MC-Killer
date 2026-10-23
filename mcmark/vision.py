@@ -177,6 +177,32 @@ def align(gray, config):
     return cv2.warpPerspective(scaled, matrix, (w,h), borderValue=255)
 
 
+def apply_review_policy(reading, config):
+    """Accept isolated, well-registered strokes; preserve all ambiguous evidence."""
+    reading['review_policy'] = 'balanced-v1'
+    reading['original_review_reasons'] = list(reading['review_reasons'])
+    if config.get('review_policy') == 'conservative':
+        reading['review_policy'] = 'conservative'
+        return reading
+    selected = reading['selected']
+    reasons = set(reading['review_reasons'])
+    # Never suppress competing ink, cancellation clues or failed registration.
+    if len(selected) != 1 or reasons - {'uncertain_density', 'faint_or_partial_mark', 'thin_stroke_candidate'}:
+        return reading
+    label = selected[0]
+    clues = reading.get('mark_clues', {})
+    mark = clues.get(label, {})
+    if (reading.get('alignment_score', 0) >= .70
+        and reading['densities'][label] >= .08
+        and mark.get('stroke_area', 0) >= 12
+        and mark.get('stroke_span', 0) >= 7
+        and not mark.get('cross_suspected') and not mark.get('diagonal_clue')
+        and all(c.get('new_ink_pixels', 0) <= 2 for option,c in clues.items() if option != label)):
+        reading['review_reasons'] = []
+        reading['auto_accept_reason'] = 'isolated_registered_stroke'
+    return reading
+
+
 def detect(gray, grid, config):
     # Global homography can leave a few pixels of local drift. Register each
     # printed question row before sampling a four-pixel-high box interior.
@@ -197,7 +223,7 @@ def detect(gray, grid, config):
         else:
             reading=detect(patch,local_grid,{**config,'_local_aligned':True,'_template_array':target})
         reading['local_offset']=[dx,dy];reading['alignment_score']=float(score)
-        return reading
+        return apply_review_policy(reading,config)
     radius = grid.get('radius', config.get('radius', 10)) * .65
     densities = {}
     for label,(x,y) in zip(grid['labels'],grid['centers']):

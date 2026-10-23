@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Balanced review policy accepts isolated strokes only with strong local registration, sufficient ink and no competing/cancellation evidence; original diagnostic reasons remain recorded. Conservative policy remains available via layout config.
+- Review screen defaults to unresolved questions with an option to show all decisions. One explicit action confirms only rows flagged solely as blank, with the existing audit trail and stale-form protection.
+- Three reused labelled sheets: marked-question review flags reduced from 28/29 to 17/29; all selections and three cancellation suggestions unchanged, all 271 blanks remain unselected. These are development regressions, not independent accuracy estimates.
+- Local suite: 54 tests, 53 passed and PostgreSQL integration skipped locally. Handwriting OCR and broader capacity/accuracy validation remain outstanding.
+
 ## 2026-10-23
 
 ### Added

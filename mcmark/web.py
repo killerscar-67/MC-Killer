@@ -263,6 +263,8 @@ def create_app(data=None, testing=False, start_worker=True):
             before=json.loads(json.dumps(row))
             for answer in row['responses']:
                 decision=request.form.get('q'+answer['question'],'').strip().upper()
+                if not decision and request.form.get('confirm_clean_blanks')=='yes' and not answer.get('teacher_review') and answer.get('review_reasons')==['blank'] and not answer['selected']:
+                    decision='BLANK'
                 if not decision: continue
                 labels=[] if decision=='BLANK' else decision.split('|')
                 config=json.loads(job['config'])
