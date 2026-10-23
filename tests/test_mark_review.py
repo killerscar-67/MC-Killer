@@ -89,3 +89,60 @@ class MarkReviewTests(unittest.TestCase):
             row['sheet_review_issues']=['metadata_unrecognized']
             refresh_review(row)
             self.assertTrue(row['review_required'])
+
+    def test_thin_strokes_are_provisional_candidates(self):
+        from mcmark.vision import detect
+        for color in (30,170):
+            sheet=self.blank.copy()
+            x,y=map(round,self.q['centers'][0])
+            self.cv2.line(sheet,(x-5,y),(x+5,y),color,1)
+            result=detect(sheet,self.q,self.config)
+            self.assertEqual(result['selected'],['A'])
+            self.assertEqual(result['suggested_selected'],['A'])
+            self.assertIn('thin_stroke_candidate',result['review_reasons'])
+            self.assertNotIn('blank',result['review_reasons'])
+            self.assertEqual(result['raw_selected'],[])
+
+    def test_compact_cross_and_cross_over_fill_suggest_other_answer(self):
+        from mcmark.vision import detect
+        for filled in (False,True):
+            sheet=self.blank.copy(); self.fill(sheet,'A')
+            if filled: self.fill(sheet,'C')
+            x,y=map(round,self.q['centers'][2])
+            self.cv2.line(sheet,(x-7,y-6),(x+7,y+6),0,1)
+            self.cv2.line(sheet,(x-7,y+6),(x+7,y-6),0,1)
+            result=detect(sheet,self.q,self.config)
+            self.assertEqual(result['suggested_selected'],['A'])
+            self.assertEqual(result['mark_clues']['C']['state'],'likely_cancelled')
+            self.assertIn('possible_cross_out',result['review_reasons'])
+            if filled: self.assertEqual(result['raw_selected'],['A','C'])
+
+    def test_single_slash_requires_review_without_discard(self):
+        from mcmark.vision import detect
+        sheet=self.blank.copy();self.fill(sheet,'A');self.fill(sheet,'C')
+        x,y=map(round,self.q['centers'][2])
+        self.cv2.line(sheet,(x-8,y-7),(x+8,y+7),0,1)
+        result=detect(sheet,self.q,self.config)
+        self.assertEqual(result['selected'],['A','C'])
+        self.assertIsNone(result['suggested_selected'])
+        self.assertIn('possible_cancellation_stroke',result['review_reasons'])
+
+    def test_blank_speck_and_registration_shift_have_no_thin_candidates(self):
+        from mcmark.vision import detect
+        import numpy as np
+        for dx,dy in ((0,0),(1,0),(0,1),(-1,-1)):
+            sheet=self.cv2.warpAffine(self.blank,np.float32([[1,0,dx],[0,1,dy]]),
+                                      (self.blank.shape[1],self.blank.shape[0]),borderValue=255)
+            x,y=map(round,self.q['centers'][0]);sheet[y,x]=0
+            result=detect(sheet,self.q,self.config)
+            self.assertEqual(result['thin_candidates'],[])
+            self.assertFalse(any(v['compact_cross_suspected'] for v in result['mark_clues'].values()))
+
+    def test_detection_does_not_depend_on_answer_key(self):
+        from mcmark.vision import detect
+        sheet=self.blank.copy();self.fill(sheet,'A');self.fill(sheet,'C')
+        x,y=map(round,self.q['centers'][2])
+        self.cv2.line(sheet,(x-7,y-6),(x+7,y+6),0,1)
+        self.cv2.line(sheet,(x-7,y+6),(x+7,y-6),0,1)
+        self.assertEqual(detect(sheet,{**self.q,'answer':'A'},self.config),
+                         detect(sheet,{**self.q,'answer':'C'},self.config))

@@ -37,6 +37,72 @@ def surrounding_ink(gray, template, grid, center, config):
     return {'outside_ink_pixels':count, 'cross_suspected':len(slopes)==2}
 
 
+def stroke_features(gray, template, grid, center, config):
+    """Template-subtracted candidate strokes; cancellation is always provisional."""
+    x,y = center
+    bw,bh = grid['sample_box']
+    rx,ry = int(bw/2+7),int(bh/2+8)
+    left,top = max(0,round(x)-rx),max(0,round(y)-ry)
+    right,bottom = min(gray.shape[1],round(x)+rx+1),min(gray.shape[0],round(y)+ry+1)
+    patch = gray[top:bottom,left:right]
+    ref = template[top:bottom,left:right]
+    # Ignore printed ink and its one-pixel registration halo.
+    printed = cv2.dilate((ref < 200).astype(np.uint8),np.ones((3,3),np.uint8))
+    ink = ((ref.astype(np.int16)-patch.astype(np.int16)>40) & (patch<200) & (printed==0)).astype(np.uint8)
+    yy,xx=np.ogrid[top:bottom,left:right]
+    core=(abs(xx-x)<=bw/2+1)&(abs(yy-y)<=bh/2+2)
+    inner=ink*core.astype(np.uint8)
+    count,_,stats,_=cv2.connectedComponentsWithStats(inner,8)
+    components=[s for s in stats[1:count] if s[cv2.CC_STAT_AREA]>=3]
+    area=max((int(s[cv2.CC_STAT_AREA]) for s in components),default=0)
+    span=max((int(max(s[cv2.CC_STAT_WIDTH],s[cv2.CC_STAT_HEIGHT])) for s in components),default=0)
+    thin=area>=5 and span>=5
+    # Fit opposite diagonals near the centre, rather than demanding both
+    # strokes extend far above and below a box. Dense fills alone are not Xs.
+    line_ink=((ref.astype(np.int16)-patch.astype(np.int16)>40)&(patch<200)).astype(np.uint8)*255
+    lines=cv2.HoughLinesP(line_ink,1,np.pi/180,threshold=4,minLineLength=6,maxLineGap=4)
+    outer_ink=line_ink.copy()
+    outer_ink[(abs(xx-x)<=bw/2)&(abs(yy-y)<=bh/2+1)]=0
+    outer_lines=cv2.HoughLinesP(outer_ink,1,np.pi/180,threshold=4,minLineLength=7,maxLineGap=7)
+    if outer_lines is not None:
+        lines=outer_lines if lines is None else np.concatenate((lines,outer_lines))
+    diagonals=[]
+    if lines is not None:
+        for a,b,c,d in lines.reshape(-1,4):
+            dx,dy=int(c-a),int(d-b)
+            if not dx or not .45<=abs(dy/dx)<=2.5: continue
+            a,b,c,d=float(a+left),float(b+top),float(c+left),float(d+top)
+            if min(a,c)>x+3 or max(a,c)<x-3: continue
+            if min(b,d)>y+2 or max(b,d)<y-2: continue
+            diagonals.append((a,b,c,d))
+    cross=False
+    for a,b,c,d in diagonals:
+        for e,f,g,h in diagonals:
+            if (c-a)*(d-b)*(g-e)*(h-f)>=0: continue
+            det=(a-c)*(f-h)-(b-d)*(e-g)
+            if abs(det)<1e-6: continue
+            ix=((a*d-b*c)*(e-g)-(a-c)*(e*h-f*g))/det
+            iy=((a*d-b*c)*(f-h)-(b-d)*(e*h-f*g))/det
+            if abs(ix-x)>4 or abs(iy-y)>4: continue
+            if not all(min(u,v)-1<=z<=max(u,v)+1 for u,v,z in ((a,c,ix),(b,d,iy),(e,g,ix),(f,h,iy))): continue
+            # Require diagonal evidence outside the narrow density sample.
+            if max(abs(b-y),abs(d-y))>=bh/2+2 and max(abs(f-y),abs(h-y))>=bh/2+2:
+                cross=True
+    # Dense fill can hide line segments. Look for all four diagonal arms
+    # beyond the fill core; a single slash or a rectangle cannot satisfy this.
+    arms=[]
+    for sign in (-1,1):
+        supported=False
+        for slope in (.6,.8,1.0,1.2):
+            band=(abs((yy-y)-sign*slope*(xx-x))<=1.5)&(abs(yy-y)>=bh/2+2)&(abs(xx-x)<=bw/2+3)
+            if all(np.count_nonzero(line_ink[band & ((xx-x)*side>=3)])>=2 for side in (-1,1)):
+                supported=True
+        arms.append(supported)
+    cross=cross or all(arms)
+    return {'new_ink_pixels':int(inner.sum()),'stroke_area':area,'stroke_span':span,
+            'thin_candidate':bool(thin),'diagonal_clue':bool(any(arms)), 'compact_cross_suspected':bool(cross)}
+
+
 def pages(path):
     if path.suffix.lower() == '.pdf':
         import fitz
@@ -147,11 +213,33 @@ def detect(gray, grid, config):
                 reasons.append('possible_cross_out')
             elif clue['outside_ink_pixels'] >= config.get('outside_ink_min_pixels', 12):
                 reasons.append('stray_ink_or_cancellation')
-    crossed = [label for label,clue in clues.items() if clue['cross_suspected']]
+    raw_selected=list(selected)
+    thin_candidates=[]
+    if grid.get('sample_box') and config.get('template_image'):
+        template=load_template(config['template_image'])
+        for label,center in zip(grid['labels'],grid['centers']):
+            feature=stroke_features(gray,template,grid,center,config)
+            clue=clues.setdefault(label,{})
+            clue.update(feature)
+            clue['cross_suspected']=bool(clue.get('cross_suspected') or feature['compact_cross_suspected'])
+            if clue['cross_suspected']:
+                reasons.append('possible_cross_out')
+            elif feature['diagonal_clue']:
+                reasons.append('possible_cancellation_stroke')
+            if label not in selected and feature['thin_candidate'] and not clue['cross_suspected']:
+                thin_candidates.append(label)
+                selected.append(label)
+                reasons.append('thin_stroke_candidate')
+            clue['state']='likely_cancelled' if clue['cross_suspected'] else 'ambiguous' if feature['diagonal_clue'] else 'active_mark' if label in selected else 'ambiguous' if feature['new_ink_pixels'] else 'blank'
+    if thin_candidates:
+        reasons=[r for r in reasons if r not in ('blank','multiple')]
+        if len(selected)>1: reasons.append('multiple')
+    crossed = [label for label,clue in clues.items() if clue.get('cross_suspected')]
     remaining = [label for label in selected if label not in crossed]
-    return {'selected':selected, 'raw_selected':list(selected), 'densities':densities,
+    return {'selected':selected, 'raw_selected':raw_selected, 'densities':densities,
             'uncertain':uncertain, 'mark_clues':clues, 'review_reasons':list(dict.fromkeys(reasons)),
-            'suggested_selected':remaining if crossed and len(remaining)==1 else None}
+            'detector_version':'stroke-v2', 'thin_candidates':thin_candidates,
+            'suggested_selected':remaining if (crossed or thin_candidates) and len(remaining)==1 else None}
 
 
 
