@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### 2026-10-26: simpler review controls
+- Shortened Pending label, removed redundant Confirm current shortcut, and kept primary choices on one row (scrollable on narrow screens).
 - Place decision buttons to the right of each student’s evidence on wider screens, stacking below on mobile.
 - Changed grouped review to a vertical student list with all question groups initially expanded.
 - Replaced dropdowns with accessible choice buttons for pending, blank and individual options; multiple-selection combinations remain available in an expandable section.

@@ -18,14 +18,14 @@
 </div><div class="review-response-controls"><fieldset class="answer-buttons" id="decision-s{{entry.index}}q{{group.question}}" {% if job.finalized %}disabled{% endif %}>
 <legend>Decision for sheet {{entry.index+1}}, question {{group.question}}</legend>
 <div class="choice-buttons">
-{% for value,label in [('', 'Keep pending'),('BLANK','Blank')] %}<label class="choice-button"><input type="radio" name="s{{entry.index}}q{{group.question}}" value="{{value}}" {% if value=='' %}checked{% endif %}><span>{{label}}</span></label>{% endfor %}
+{% for value,label in [('', 'Pending'),('BLANK','Blank')] %}<label class="choice-button"><input type="radio" name="s{{entry.index}}q{{group.question}}" value="{{value}}" {% if value=='' %}checked{% endif %}><span>{{label}}</span></label>{% endfor %}
 {% for option in group.labels %}<label class="choice-button"><input type="radio" name="s{{entry.index}}q{{group.question}}" value="{{option}}"><span>{{option}}</span></label>{% endfor %}
 </div>
 <details class="multiple-choices"><summary>Multiple marked choices</summary><div class="choice-buttons">
 {% for combination in group.labels|answer_combinations %}<label class="choice-button"><input type="radio" name="s{{entry.index}}q{{group.question}}" value="{{combination|join('|')}}"><span>{{combination|join(' + ')}}</span></label>{% endfor %}
 </div></details>
 </fieldset>
-{% if not job.finalized %}<div class="review-actions"><button type="button" data-review-target="decision-s{{entry.index}}q{{group.question}}" data-review-value="{{a.selected|join('|') or 'BLANK'}}">Confirm current {{a.selected|join(' + ') or 'BLANK'}}</button>{% if a.get('suggested_selected') and a.suggested_selected!=a.selected %}<button type="button" data-review-target="decision-s{{entry.index}}q{{group.question}}" data-review-value="{{a.suggested_selected|join('|')}}">Use suggestion {{a.suggested_selected|join(' + ')}}</button>{% endif %}</div>{% endif %}
+{% if not job.finalized and a.get('suggested_selected') and a.suggested_selected!=a.selected %}<div class="review-actions"><button type="button" data-review-target="decision-s{{entry.index}}q{{group.question}}" data-review-value="{{a.suggested_selected|join('|')}}">Use suggestion {{a.suggested_selected|join(' + ')}}</button></div>{% endif %}
 </div></div></article>{% endfor %}</div></details>{% endfor %}
 {% if groups and not job.finalized %}<div class="save-bar"><label>Review note<input name="note" maxlength="2000"></label><button class="primary">Save selected decisions & recalculate →</button><p>Buttons prepare decisions. Save to apply them; other responses stay pending.</p></div>{% endif %}
 </form>{% endblock %}
