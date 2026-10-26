@@ -37,6 +37,26 @@ def surrounding_ink(gray, template, grid, center, config):
     return {'outside_ink_pixels':count, 'cross_suspected':len(slopes)==2}
 
 
+def diagonal_support(ink, center):
+    """Require straight ink through both sides, not curved arc tangents."""
+    x,y=center
+    supports=[]
+    for sign in (-1,1):
+        best=0.0
+        for slope in (.6,.8,1.0,1.2):
+            sides=[]
+            for side in (-1,1):
+                hits=[]
+                for distance in range(3,8):
+                    px=round(x+side*distance);py=round(y+sign*slope*side*distance)
+                    region=ink[max(0,py-1):py+2,max(0,px-1):px+2]
+                    hits.append(bool(region.size and np.any(region)))
+                sides.append(sum(hits)/len(hits))
+            best=max(best,min(sides))
+        supports.append(best)
+    return supports
+
+
 def stroke_features(gray, template, grid, center, config):
     """Template-subtracted candidate strokes; cancellation is always provisional."""
     x,y = center
@@ -99,9 +119,12 @@ def stroke_features(gray, template, grid, center, config):
             if all(np.count_nonzero(line_ink[band & ((xx-x)*side>=3)])>=2 for side in (-1,1)):
                 supported=True
         arms.append(supported)
-    cross=cross or all(arms)
+    support=diagonal_support(line_ink,(x-left,y-top))
+    straight=[value>=.8 for value in support]
+    cross=(cross or all(arms)) and all(arms) and all(straight)
     return {'new_ink_pixels':int(inner.sum()),'stroke_area':area,'stroke_span':span,
-            'thin_candidate':bool(thin),'diagonal_clue':bool(any(arms)), 'compact_cross_suspected':bool(cross)}
+            'thin_candidate':bool(thin),'diagonal_clue':bool(any(arms) and any(straight)), 'compact_cross_suspected':bool(cross),
+            'straight_diagonal_support':support}
 
 
 def pages(path):
@@ -276,7 +299,7 @@ def detect(gray, grid, config):
             feature=stroke_features(gray,template,grid,center,config)
             clue=clues.setdefault(label,{})
             clue.update(feature)
-            clue['cross_suspected']=bool(clue.get('cross_suspected') or feature['compact_cross_suspected'])
+            clue['cross_suspected']=bool(feature['compact_cross_suspected'] or (clue.get('cross_suspected') and clue.get('outside_ink_pixels',0)>=30))
             if clue['cross_suspected']:
                 reasons.append('possible_cross_out')
             elif feature['diagonal_clue']:
@@ -285,6 +308,9 @@ def detect(gray, grid, config):
                 thin_candidates.append(label)
                 reasons.append('thin_stroke_candidate')
             clue['state']='likely_cancelled' if clue['cross_suspected'] else 'ambiguous' if feature['diagonal_clue'] else 'active_mark' if label in selected else 'ambiguous' if feature['new_ink_pixels'] else 'blank'
+    if clues and not config.get('_disable_strokes'):
+        reasons=[r for r in reasons if r!='possible_cross_out']
+        if any(c.get('cross_suspected') for c in clues.values()): reasons.append('possible_cross_out')
     if len(thin_candidates)==1:
         selected.append(thin_candidates[0])
         clues[thin_candidates[0]]['state']='ambiguous' if clues[thin_candidates[0]]['diagonal_clue'] else 'active_mark'
@@ -299,7 +325,7 @@ def detect(gray, grid, config):
         clues[label]['state']='likely_cancelled' if remaining else 'ambiguous'
     return {'selected':selected, 'raw_selected':raw_selected, 'densities':densities,
             'uncertain':uncertain, 'mark_clues':clues, 'review_reasons':list(dict.fromkeys(reasons)),
-            'detector_version':'stroke-v2', 'thin_candidates':thin_candidates,
+            'detector_version':'stroke-v2.1', 'thin_candidates':thin_candidates,
             'suggested_selected':remaining if (crossed or len(thin_candidates)==1) and len(remaining)==1 and len(thin_candidates)<=1 else None}
 
 

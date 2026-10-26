@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### 2026-10-26: loop/circle refinement
+- Compact cross-out clues now require four diagonal arms plus straight ink support on both sides of each diagonal; arc tangents alone are insufficient. Large crosses retain the surrounding-line path with at least 30 outside-ink pixels.
+- Store straight-diagonal support and detector_version=stroke-v2.1. Suggestions remain provisional and ambiguous patterns remain reviewable.
+- Added ellipse/loop, looped multi-selection and cross-over-loop regressions, alongside existing compact/fill-plus-X tests.
+- Reused three labelled sheets: marked reviews now 16/29 (3, 6, 7), down from initial PR #4's 17/29 and live stroke-v2's 28/29. Candidate selection sets and all three true cancellation suggestions remain correct; intentional B+C has no cancellation suggestion. All 271 intended blanks remain unselected.
+- 57 local tests: 56 passed, PostgreSQL integration skipped. Independent writer/scanner validation and hosting benchmarks remain outstanding; no deployment.
+
+
 - Balanced review policy accepts isolated strokes only with strong local registration, sufficient ink and no competing/cancellation evidence; original diagnostic reasons remain recorded. Conservative policy remains available via layout config.
 - Review screen defaults to unresolved questions with an option to show all decisions. One explicit action confirms only rows flagged solely as blank, with the existing audit trail and stale-form protection.
 - Three reused labelled sheets: marked-question review flags reduced from 28/29 to 17/29; all selections and three cancellation suggestions unchanged, all 271 blanks remain unselected. These are development regressions, not independent accuracy estimates.

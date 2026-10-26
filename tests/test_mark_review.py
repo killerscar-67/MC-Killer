@@ -103,6 +103,40 @@ class MarkReviewTests(unittest.TestCase):
             self.assertNotIn('blank',result['review_reasons'])
             self.assertEqual(result['raw_selected'],[])
 
+    def test_loops_and_circles_are_not_crossed_choices(self):
+        from mcmark.vision import detect
+        for axes in ((7,4),(10,8),(12,10)):
+            for thickness in (1,2):
+                with self.subTest(axes=axes,thickness=thickness):
+                    sheet=self.blank.copy()
+                    x,y=map(round,self.q['centers'][1])
+                    self.cv2.ellipse(sheet,(x,y),axes,0,0,360,0,thickness)
+                    result=detect(sheet,self.q,self.config)
+                    self.assertNotIn('possible_cross_out',result['review_reasons'])
+                    self.assertNotEqual(result['mark_clues']['B'].get('state'),'likely_cancelled')
+
+    def test_looped_selection_does_not_cancel_another_choice(self):
+        from mcmark.vision import detect
+        sheet=self.blank.copy();self.fill(sheet,'A')
+        x,y=map(round,self.q['centers'][1])
+        self.cv2.ellipse(sheet,(x,y),(7,4),0,0,360,0,2)
+        result=detect(sheet,self.q,self.config)
+        self.assertIn('A',result['selected'])
+        self.assertIn('B',result['selected'])
+        self.assertIn('multiple',result['review_reasons'])
+        self.assertIsNone(result['suggested_selected'])
+
+    def test_cross_over_loop_still_needs_review(self):
+        from mcmark.vision import detect
+        sheet=self.blank.copy();self.fill(sheet,'A')
+        x,y=map(round,self.q['centers'][1])
+        self.cv2.ellipse(sheet,(x,y),(7,4),0,0,360,0,1)
+        self.cv2.line(sheet,(x-10,y-9),(x+10,y+9),0,2)
+        self.cv2.line(sheet,(x-10,y+9),(x+10,y-9),0,2)
+        result=detect(sheet,self.q,self.config)
+        self.assertIn('possible_cross_out',result['review_reasons'])
+        self.assertEqual(result['suggested_selected'],['A'])
+
     def test_compact_cross_and_cross_over_fill_suggest_other_answer(self):
         from mcmark.vision import detect
         for filled in (False,True):
