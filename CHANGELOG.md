@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### 2026-10-26: simpler review controls
+- Changed grouped review to a vertical student list with all question groups initially expanded.
+- Replaced dropdowns with accessible choice buttons for pending, blank and individual options; multiple-selection combinations remain available in an expandable section.
+- Browser-verified one-click selection and highlighted state. Existing transactional saves/audit behaviour is unchanged; 60 local tests, 59 passed and one PostgreSQL integration skipped.
+
 ### 2026-10-26: question-grouped teacher review
 - Added an assessment-wide pending-answer page grouped by question, with student identification, row images, original/current readings, dark coverage, reasons and suggestions. Individual sheet review remains available.
 - Teachers can prepare current/suggested/custom decisions and save across students in one transaction. Unchanged answers stay pending; identity flags remain separate.

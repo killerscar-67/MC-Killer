@@ -121,6 +121,10 @@ class TeacherWebTests(unittest.TestCase):
         page=self.client.get(f'/assessments/{jid}/review')
         self.assertEqual(page.status_code,200)
         self.assertIn(b'Question 2',page.data)
+        self.assertNotIn(b'<select',page.data)
+        self.assertIn(b'type="radio" name="s0q2" value="B"',page.data)
+        self.assertIn(b'type="radio" name="s0q2" value="B|C"',page.data)
+        self.assertIn(b'question-review-list',page.data)
         self.assertIn(b'Other student',page.data)
         self.assertNotIn(b'name="s0q1"',page.data)
         form={'csrf':self.csrf,'version':version,'s0q2':'B','s1q2':'BLANK','note':'Compared row images'}

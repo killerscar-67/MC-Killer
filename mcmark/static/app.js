@@ -14,6 +14,10 @@ if(pendingFilter){
 }
 
 document.querySelectorAll('[data-review-target]').forEach(button=>button.addEventListener('click',()=>{
- const select=document.getElementById(button.dataset.reviewTarget);
- if(select && !select.disabled){select.value=button.dataset.reviewValue;select.classList.add('decision-prepared');}
+ const field=document.getElementById(button.dataset.reviewTarget);
+ if(field && !field.disabled){
+  const choice=Array.from(field.querySelectorAll('input[type=radio]')).find(input=>input.value===button.dataset.reviewValue);
+  if(choice){choice.checked=true;const details=choice.closest('details');if(details)details.open=true;}
+ }
 }));
+document.querySelectorAll('.multiple-choices input').forEach(input=>input.addEventListener('change',()=>{input.closest('details').open=true;}));

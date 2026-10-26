@@ -6,8 +6,8 @@
 {% if not groups %}<div class="notice">No unresolved answers. Check remaining sheet and identity flags before finalizing.</div>{% endif %}
 <form method="post" action="{{url_for('save_question_review',jid=job.id)}}">
 <input type="hidden" name="csrf" value="{{session.csrf}}"><input type="hidden" name="version" value="{{job.updated}}">
-{% for group in groups %}<details class="card spaced" {% if loop.first %}open{% endif %}><summary><strong>Question {{group.question}}</strong> · {{group.entries|length}} student response(s)</summary>
-<div class="question-review-grid">{% for entry in group.entries %}{% set a=entry.answer %}{% set row=entry.row %}
+{% for group in groups %}<details class="card spaced" open><summary><strong>Question {{group.question}}</strong> · {{group.entries|length}} student response(s)</summary>
+<div class="question-review-list">{% for entry in group.entries %}{% set a=entry.answer %}{% set row=entry.row %}
 <article class="group-review-card">
 <h3>Sheet {{entry.index+1}} · {{row.name or 'Name needs review'}}</h3><p class="muted">Class {{row.get('class','') or '—'}} / {{row.get('student_id','') or '—'}} · <a href="{{url_for('sheet',jid=job.id,index=entry.index)}}">Individual review ↗</a></p>
 <p>Original density reading <strong>{{a.get('raw_selected',a.selected)|join(' + ') or 'BLANK'}}</strong> · Current <strong>{{a.selected|join(' + ') or 'BLANK'}}</strong></p>
@@ -15,12 +15,16 @@
 <p class="hint">{% for option,clue in a.get('mark_clues',{}).items() %}{{option}}: {{clue.get('state','unclassified')|replace('_',' ')}} · {{'%.0f'|format(a.densities.get(option,0)*100)}}% dark coverage{% if not loop.last %}; {% endif %}{% endfor %}</p>
 <p class="muted">{{a.review_reasons|join(' · ')|replace('_',' ')}}</p>
 {% if a.get('suggested_selected') %}<p>Suggestion: <strong>{{a.suggested_selected|join(' + ')}}</strong> — requires your confirmation.</p>{% endif %}
-<label>Decision for sheet {{entry.index+1}}, question {{group.question}}
-<select id="decision-s{{entry.index}}q{{group.question}}" name="s{{entry.index}}q{{group.question}}" {% if job.finalized %}disabled{% endif %}>
-<option value="">Keep pending</option><option value="BLANK">BLANK</option>
-{% for option in group.labels %}<option value="{{option}}">{{option}}</option>{% endfor %}
-{% for combination in group.labels|answer_combinations %}<option value="{{combination|join('|')}}">{{combination|join(' + ')}}</option>{% endfor %}
-</select></label>
+<fieldset class="answer-buttons" id="decision-s{{entry.index}}q{{group.question}}" {% if job.finalized %}disabled{% endif %}>
+<legend>Decision for sheet {{entry.index+1}}, question {{group.question}}</legend>
+<div class="choice-buttons">
+{% for value,label in [('', 'Keep pending'),('BLANK','Blank')] %}<label class="choice-button"><input type="radio" name="s{{entry.index}}q{{group.question}}" value="{{value}}" {% if value=='' %}checked{% endif %}><span>{{label}}</span></label>{% endfor %}
+{% for option in group.labels %}<label class="choice-button"><input type="radio" name="s{{entry.index}}q{{group.question}}" value="{{option}}"><span>{{option}}</span></label>{% endfor %}
+</div>
+<details class="multiple-choices"><summary>Multiple marked choices</summary><div class="choice-buttons">
+{% for combination in group.labels|answer_combinations %}<label class="choice-button"><input type="radio" name="s{{entry.index}}q{{group.question}}" value="{{combination|join('|')}}"><span>{{combination|join(' + ')}}</span></label>{% endfor %}
+</div></details>
+</fieldset>
 {% if not job.finalized %}<div class="review-actions"><button type="button" data-review-target="decision-s{{entry.index}}q{{group.question}}" data-review-value="{{a.selected|join('|') or 'BLANK'}}">Confirm current {{a.selected|join(' + ') or 'BLANK'}}</button>{% if a.get('suggested_selected') and a.suggested_selected!=a.selected %}<button type="button" data-review-target="decision-s{{entry.index}}q{{group.question}}" data-review-value="{{a.suggested_selected|join('|')}}">Use suggestion {{a.suggested_selected|join(' + ')}}</button>{% endif %}</div>{% endif %}
 </article>{% endfor %}</div></details>{% endfor %}
 {% if groups and not job.finalized %}<div class="save-bar"><label>Review note<input name="note" maxlength="2000"></label><button class="primary">Save selected decisions & recalculate →</button><p>Buttons prepare decisions. Save to apply them; other responses stay pending.</p></div>{% endif %}
