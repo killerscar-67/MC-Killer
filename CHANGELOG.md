@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### 2026-10-26: simpler review controls
+- Place decision buttons to the right of each student’s evidence on wider screens, stacking below on mobile.
 - Changed grouped review to a vertical student list with all question groups initially expanded.
 - Replaced dropdowns with accessible choice buttons for pending, blank and individual options; multiple-selection combinations remain available in an expandable section.
 - Browser-verified one-click selection and highlighted state. Existing transactional saves/audit behaviour is unchanged; 60 local tests, 59 passed and one PostgreSQL integration skipped.

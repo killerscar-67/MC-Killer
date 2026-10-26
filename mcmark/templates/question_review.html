@@ -10,12 +10,12 @@
 <div class="question-review-list">{% for entry in group.entries %}{% set a=entry.answer %}{% set row=entry.row %}
 <article class="group-review-card">
 <h3>Sheet {{entry.index+1}} · {{row.name or 'Name needs review'}}</h3><p class="muted">Class {{row.get('class','') or '—'}} / {{row.get('student_id','') or '—'}} · <a href="{{url_for('sheet',jid=job.id,index=entry.index)}}">Individual review ↗</a></p>
-<p>Original density reading <strong>{{a.get('raw_selected',a.selected)|join(' + ') or 'BLANK'}}</strong> · Current <strong>{{a.selected|join(' + ') or 'BLANK'}}</strong></p>
+<div class="review-response-layout"><div class="review-response-evidence"><p>Original density reading <strong>{{a.get('raw_selected',a.selected)|join(' + ') or 'BLANK'}}</strong> · Current <strong>{{a.selected|join(' + ') or 'BLANK'}}</strong></p>
 {% if a.get('review_crop') and asset(a.review_crop) %}<img class="question-crop" loading="lazy" src="{{asset(a.review_crop)}}" alt="Sheet {{entry.index+1}}, question {{group.question}} original row">{% else %}<p class="warning">Question image unavailable. Open individual review for full-sheet evidence.</p>{% endif %}
 <p class="hint">{% for option,clue in a.get('mark_clues',{}).items() %}{{option}}: {{clue.get('state','unclassified')|replace('_',' ')}} · {{'%.0f'|format(a.densities.get(option,0)*100)}}% dark coverage{% if not loop.last %}; {% endif %}{% endfor %}</p>
 <p class="muted">{{a.review_reasons|join(' · ')|replace('_',' ')}}</p>
 {% if a.get('suggested_selected') %}<p>Suggestion: <strong>{{a.suggested_selected|join(' + ')}}</strong> — requires your confirmation.</p>{% endif %}
-<fieldset class="answer-buttons" id="decision-s{{entry.index}}q{{group.question}}" {% if job.finalized %}disabled{% endif %}>
+</div><div class="review-response-controls"><fieldset class="answer-buttons" id="decision-s{{entry.index}}q{{group.question}}" {% if job.finalized %}disabled{% endif %}>
 <legend>Decision for sheet {{entry.index+1}}, question {{group.question}}</legend>
 <div class="choice-buttons">
 {% for value,label in [('', 'Keep pending'),('BLANK','Blank')] %}<label class="choice-button"><input type="radio" name="s{{entry.index}}q{{group.question}}" value="{{value}}" {% if value=='' %}checked{% endif %}><span>{{label}}</span></label>{% endfor %}
@@ -26,6 +26,6 @@
 </div></details>
 </fieldset>
 {% if not job.finalized %}<div class="review-actions"><button type="button" data-review-target="decision-s{{entry.index}}q{{group.question}}" data-review-value="{{a.selected|join('|') or 'BLANK'}}">Confirm current {{a.selected|join(' + ') or 'BLANK'}}</button>{% if a.get('suggested_selected') and a.suggested_selected!=a.selected %}<button type="button" data-review-target="decision-s{{entry.index}}q{{group.question}}" data-review-value="{{a.suggested_selected|join('|')}}">Use suggestion {{a.suggested_selected|join(' + ')}}</button>{% endif %}</div>{% endif %}
-</article>{% endfor %}</div></details>{% endfor %}
+</div></div></article>{% endfor %}</div></details>{% endfor %}
 {% if groups and not job.finalized %}<div class="save-bar"><label>Review note<input name="note" maxlength="2000"></label><button class="primary">Save selected decisions & recalculate →</button><p>Buttons prepare decisions. Save to apply them; other responses stay pending.</p></div>{% endif %}
 </form>{% endblock %}
