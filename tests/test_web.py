@@ -107,6 +107,55 @@ class TeacherWebTests(unittest.TestCase):
         self.assertNotIn('teacher_review',row['responses'][1])
         self.assertTrue(row['review_required'])
 
+    def grouped_fixture(self):
+        jid=self.upload();row=self.ready(jid)
+        import copy
+        second=copy.deepcopy(row);second['name']='Other student'
+        with connect(self.data) as db:
+            db.execute('UPDATE jobs SET results=? WHERE id=?',(json.dumps([row,second]),jid))
+            version=str(db.execute('SELECT updated FROM jobs WHERE id=?',(jid,)).fetchone()[0])
+        return jid,version
+
+    def test_group_review_shows_pending_and_saves_multiple_students(self):
+        jid,version=self.grouped_fixture()
+        page=self.client.get(f'/assessments/{jid}/review')
+        self.assertEqual(page.status_code,200)
+        self.assertIn(b'Question 2',page.data)
+        self.assertIn(b'Other student',page.data)
+        self.assertNotIn(b'name="s0q1"',page.data)
+        form={'csrf':self.csrf,'version':version,'s0q2':'B','s1q2':'BLANK','note':'Compared row images'}
+        self.assertEqual(self.client.post(f'/assessments/{jid}/review',data=form).status_code,302)
+        with connect(self.data) as db:
+            rows=json.loads(db.execute('SELECT results FROM jobs WHERE id=?',(jid,)).fetchone()[0])
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM audit WHERE job=? AND action='question_group_reviewed'",(jid,)).fetchone()[0],1)
+        self.assertEqual(rows[0]['responses'][1]['selected'],['B'])
+        self.assertEqual(rows[1]['responses'][1]['selected'],[])
+        self.assertEqual(rows[0]['responses'][1]['raw_selected'],['B','C'])
+        self.assertTrue(rows[0]['review_required']) # identity still unresolved
+        self.assertEqual(rows[0]['score'],2)
+        self.assertEqual(self.client.post(f'/assessments/{jid}/review',data=form).status_code,409)
+
+    def test_group_review_invalid_batch_rolls_back_and_keeps_pending(self):
+        jid,version=self.grouped_fixture()
+        form={'csrf':self.csrf,'version':version,'s0q2':'B','s1q2':'Z'}
+        self.assertEqual(self.client.post(f'/assessments/{jid}/review',data=form).status_code,400)
+        with connect(self.data) as db:
+            row=json.loads(db.execute('SELECT results FROM jobs WHERE id=?',(jid,)).fetchone()[0])[0]
+        self.assertEqual(row['responses'][1]['selected'],['B','C'])
+        self.assertNotIn('teacher_review',row['responses'][1])
+        self.assertEqual(self.client.post(f'/assessments/{jid}/review',data={'csrf':self.csrf,'version':version}).status_code,302)
+        self.assertIn(b'name="s0q2"',self.client.get(f'/assessments/{jid}/review').data)
+
+    def test_group_review_ownership_csrf_and_finalization(self):
+        jid,version=self.grouped_fixture()
+        other=self.app.test_client()
+        with other.session_transaction() as session: session.update(user='bob',csrf='token')
+        self.assertEqual(other.get(f'/assessments/{jid}/review').status_code,404)
+        self.assertEqual(other.post(f'/assessments/{jid}/review',data={'csrf':'token','version':version}).status_code,404)
+        self.assertEqual(self.client.post(f'/assessments/{jid}/review',data={'version':version}).status_code,400)
+        with connect(self.data) as db:db.execute('UPDATE jobs SET finalized=1 WHERE id=?',(jid,))
+        self.assertEqual(self.client.post(f'/assessments/{jid}/review',data={'csrf':self.csrf,'version':version,'s0q2':'B'}).status_code,409)
+
     def test_disguised_and_nonfinite_uploads_rejected(self):
         response=self.client.post('/assessments/new',data={'csrf':self.csrf,'title':'Bad','count':'1','key':'A','wrong':'0','pass':'50','scans':(io.BytesIO(b'not an image'),'scan.png')})
         self.assertEqual(response.status_code,400)

@@ -12,3 +12,8 @@ if(pendingFilter){
  const filterAnswers=()=>document.querySelectorAll('[data-resolved]').forEach(row=>{row.hidden=pendingFilter.checked && row.dataset.resolved==='yes';});
  pendingFilter.addEventListener('change',filterAnswers);filterAnswers();
 }
+
+document.querySelectorAll('[data-review-target]').forEach(button=>button.addEventListener('click',()=>{
+ const select=document.getElementById(button.dataset.reviewTarget);
+ if(select && !select.disabled){select.value=button.dataset.reviewValue;select.classList.add('decision-prepared');}
+}));

@@ -3,6 +3,7 @@ import argparse
 import getpass
 import hashlib
 import io
+from itertools import combinations
 import json
 import logging
 import os
@@ -37,6 +38,10 @@ def create_app(data=None, testing=False, start_worker=True):
     if storage:
         storage.check()
     app = Flask(__name__)
+    @app.template_filter('answer_combinations')
+    def answer_combinations(labels):
+        return [choice for size in range(2,len(labels)+1) for choice in combinations(labels,size)]
+
     app.config.update(SECRET_KEY=secret or 'test-only-secret', TESTING=testing, DATA=data,
                       MAX_CONTENT_LENGTH=50*1024*1024, SESSION_COOKIE_HTTPONLY=True,
                       SESSION_COOKIE_SAMESITE='Lax', SESSION_COOKIE_SECURE=os.environ.get('MCK_HTTPS')=='1',
@@ -207,6 +212,68 @@ def create_app(data=None, testing=False, start_worker=True):
             history=db.execute('SELECT action,at FROM audit WHERE job=? ORDER BY id DESC LIMIT 20',(jid,)).fetchall()
         return render_template('assessment.html',job=job,results=results,history=history,
             pending=sum(r.get('review_required',False) for r in results))
+
+    @app.get('/assessments/<jid>/review')
+    @login_required
+    def question_review(jid):
+        job=owned(jid)
+        if job['state']!='ready': abort(409,'Assessment is not ready for review.')
+        rows=json.loads(job['results']);config=json.loads(job['config'])
+        groups=[]
+        for question in config['questions']:
+            entries=[]
+            for index,row in enumerate(rows):
+                for answer in row['responses']:
+                    if answer['question']==str(question['id']) and answer.get('review_reasons') and not answer.get('teacher_review'):
+                        entries.append({'index':index,'row':row,'answer':answer})
+            if entries: groups.append({'question':str(question['id']),'labels':question['labels'],'entries':entries})
+        output=(data/'batches'/jid/'output').resolve()
+        def asset(path):
+            if not path: return None
+            try:
+                relative=Path(path).resolve().relative_to(output) if Path(path).is_absolute() else Path(path)
+                if not relative.parts or relative.parts[0]!='review' or '..' in relative.parts: return None
+            except ValueError: return None
+            return url_for('image',jid=jid,path=relative.as_posix())
+        return render_template('question_review.html',job=job,groups=groups,asset=asset,
+            pending_answers=sum(len(g['entries']) for g in groups),
+            identity_rows=[{'index':i,'row':r} for i,r in enumerate(rows) if r.get('sheet_review_issues')])
+
+    @app.post('/assessments/<jid>/review')
+    @login_required
+    def save_question_review(jid):
+        owned(jid)
+        with connect(data) as db:
+            begin_write(db)
+            job=dict(locked(db,'SELECT * FROM jobs WHERE id=? AND owner=?',(jid,session['user'])).fetchone())
+            if job['state']!='ready' or job['finalized']: abort(409,'Assessment is not open for review.')
+            if request.form.get('version')!=str(job['updated']): abort(409,'Results changed. Reload before saving.')
+            rows=json.loads(job['results']);config=json.loads(job['config'])
+            questions={str(q['id']):q for q in config['questions']}
+            changes=[];touched=set()
+            for index,row in enumerate(rows):
+                for answer in row['responses']:
+                    field='s'+str(index)+'q'+answer['question']
+                    values=request.form.getlist(field)
+                    if len(values)>1: abort(400,'Duplicate answer decision.')
+                    decision=(values[0] if values else '').strip().upper()
+                    if not decision: continue
+                    if answer.get('teacher_review') or not answer.get('review_reasons'): abort(409,'A response is no longer pending. Reload before saving.')
+                    labels=[] if decision=='BLANK' else decision.split('|')
+                    if len(set(labels))!=len(labels) or any(label not in questions[answer['question']]['labels'] for label in labels): abort(400,'Invalid answer decision.')
+                    answer.setdefault('raw_selected',list(answer['selected']))
+                    previous=list(answer['selected'])
+                    answer['teacher_review']={'previous_selected':previous,'decision':labels,
+                        'note':request.form.get('note','')[:2000],'actor':session['email'],'at':time.time()}
+                    answer['selected']=labels;touched.add(index)
+                    changes.append({'sheet':index,'question':answer['question'],'before':previous,'after':labels})
+            if changes:
+                for index in touched:
+                    rows[index].update(grade(rows[index]['responses'],config));refresh_review(rows[index])
+                db.execute('UPDATE jobs SET results=?,updated=? WHERE id=?',(json.dumps(rows,ensure_ascii=False),time.time(),jid))
+                audit(db,jid,'question_group_reviewed',{'changes':changes,'note':request.form.get('note','')[:2000]})
+        flash(str(len(changes))+' answer decision(s) saved. Unchanged responses remain pending.','success')
+        return redirect(url_for('question_review',jid=jid))
 
     @app.get('/assessments/<jid>/sheets/<int:index>')
     @login_required

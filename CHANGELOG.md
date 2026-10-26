@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### 2026-10-26: question-grouped teacher review
+- Added an assessment-wide pending-answer page grouped by question, with student identification, row images, original/current readings, dark coverage, reasons and suggestions. Individual sheet review remains available.
+- Teachers can prepare current/suggested/custom decisions and save across students in one transaction. Unchanged answers stay pending; identity flags remain separate.
+- Preserves ownership, CSRF, stale-form rejection, finalization locks, original readings, per-answer teacher records and an audit event. Invalid decisions abort the whole save.
+- Synthetic browser preview verified images and quick-confirm controls. Local suite: 60 tests, 59 passed and PostgreSQL skipped locally. No deployment or change to detector thresholds in this follow-up.
+
 ### 2026-10-26: loop/circle refinement
 - Compact cross-out clues now require four diagonal arms plus straight ink support on both sides of each diagonal; arc tangents alone are insufficient. Large crosses retain the surrounding-line path with at least 30 outside-ink pixels.
 - Store straight-diagonal support and detector_version=stroke-v2.1. Suggestions remain provisional and ambiguous patterns remain reviewable.
