@@ -150,6 +150,21 @@ class TeacherWebTests(unittest.TestCase):
         self.assertEqual(self.client.post(f'/assessments/{jid}/review',data={'csrf':self.csrf,'version':version}).status_code,302)
         self.assertIn(b'name="s0q2"',self.client.get(f'/assessments/{jid}/review').data)
 
+    def test_visual_batch_controls_exclude_ambiguous_rows(self):
+        jid,version=self.grouped_fixture()
+        with connect(self.data) as db:
+            rows=json.loads(db.execute('SELECT results FROM jobs WHERE id=?',(jid,)).fetchone()[0])
+            a=rows[0]['responses'][1]
+            a.update(selected=['B'],review_reasons=['stray_ink_or_cancellation'],review_crop='review/test.png')
+            rows[1]['responses'][1]['review_crop']='review/test.png'
+            db.execute('UPDATE jobs SET results=? WHERE id=?',(json.dumps(rows),jid))
+        page=self.client.get(f'/assessments/{jid}/review')
+        self.assertEqual(page.status_code,200)
+        self.assertEqual(page.data.count(b'data-batch-choice'),1)
+        self.assertIn(b'data-field="decision-s0q2"',page.data)
+        self.assertNotIn(b'data-field="decision-s1q2"',page.data)
+        self.assertIn(b'value="" checked',page.data)
+
     def test_group_review_ownership_csrf_and_finalization(self):
         jid,version=self.grouped_fixture()
         other=self.app.test_client()

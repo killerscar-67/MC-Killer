@@ -21,3 +21,20 @@ document.querySelectorAll('[data-review-target]').forEach(button=>button.addEven
  }
 }));
 document.querySelectorAll('.multiple-choices input').forEach(input=>input.addEventListener('change',()=>{input.closest('details').open=true;}));
+
+document.querySelectorAll('[data-batch-select]').forEach(button=>button.addEventListener('click',()=>{
+ const group=button.closest('details');
+ group.querySelectorAll('[data-batch-choice]').forEach(box=>{const image=box.closest('article').querySelector('img');box.checked=!!(image && image.complete && image.naturalWidth);});
+ group.querySelector('[data-batch-status]').textContent=group.querySelectorAll('[data-batch-choice]:checked').length+' rows selected. Inspect before confirming.';
+}));
+document.querySelectorAll('[data-batch-prepare]').forEach(button=>button.addEventListener('click',()=>{
+ const group=button.closest('details');let count=0;
+ group.querySelectorAll('[data-batch-choice]:checked').forEach(box=>{
+  const field=document.getElementById(box.dataset.field);const pending=field.querySelector('input:checked');
+  if(!field.disabled && pending && pending.value===''){
+   const choice=Array.from(field.querySelectorAll('input')).find(input=>input.value===box.dataset.value);
+   if(choice){choice.checked=true;count++;}
+  }
+ });
+ group.querySelector('[data-batch-status]').textContent=count+' decisions prepared. Save to apply; existing decisions were kept.';
+}));

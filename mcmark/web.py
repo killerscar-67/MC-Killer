@@ -19,7 +19,7 @@ from flask import Flask, abort, flash, redirect, render_template, request, send_
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 from .core import export, grade, validate
-from .review import refresh_review
+from .review import refresh_review, batch_review_eligible
 from .database import connect,initialize,begin_write,locked,next_queued,INTEGRITY_ERRORS
 from .storage import configured_storage, job_prefix, relative_evidence, validate_evidence, StorageError
 
@@ -236,7 +236,7 @@ def create_app(data=None, testing=False, start_worker=True):
             except ValueError: return None
             return url_for('image',jid=jid,path=relative.as_posix())
         return render_template('question_review.html',job=job,groups=groups,asset=asset,
-            pending_answers=sum(len(g['entries']) for g in groups),
+            pending_answers=sum(len(g['entries']) for g in groups),batch_review_eligible=batch_review_eligible,
             identity_rows=[{'index':i,'row':r} for i,r in enumerate(rows) if r.get('sheet_review_issues')])
 
     @app.post('/assessments/<jid>/review')

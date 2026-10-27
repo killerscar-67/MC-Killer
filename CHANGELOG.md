@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### 2026-10-27: visual batch confirmation
+- Add explicit selection/confirmation for eligible single-choice cards grouped by question, preserving manual decisions and existing save/audit protections. Ambiguous cancellations, multiple marks, blanks and uncertain alignment remain excluded.
+- Add offline red-annotation impact diagnostic; no production masking or automatic flag suppression. The 12-sheet experiment reduced pending flags 67 to 54 but changed three blank readings and several suggestions, requiring labels before enabling any filtering.
+- 24 of 67 pending rows in the new batch qualify for visual batch confirmation. Latest local suite: 62 tests, 61 passed and PostgreSQL integration skipped.
+
+
 ### 2026-10-26: simpler review controls
 - Shortened Pending label, removed redundant Confirm current shortcut, and kept primary choices on one row (scrollable on narrow screens).
 - Place decision buttons to the right of each student’s evidence on wider screens, stacking below on mobile.
