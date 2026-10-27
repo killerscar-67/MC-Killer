@@ -113,3 +113,14 @@ def write_review(results, output):
         '<h1>MCQ teacher review</h1><p>These images show unannotated registered question rows. Cross-out clues are suggestions only; the system does not discard a marked option automatically.</p>'
         '<p>Edit the decision column in review_queue.csv: A, B, C, D, A|C, or BLANK. An empty decision stays pending. Keep file, page and question unchanged. Re-run the same batch with --corrections pointing to the edited CSV and a new output folder. Scores and statistics are recalculated; original readings are retained.</p>'
         +(''.join(sections) or '<p>No question reviews are pending. Check students.csv for metadata or identity review flags.</p>')+'</html>',encoding='utf-8')
+
+
+def batch_review_eligible(answer):
+    """Permit explicit visual batch confirmation only for isolated single choices."""
+    blockers={'multiple','blank','possible_cross_out','possible_cancellation_stroke',
+              'uncertain_local_alignment','ambiguous_thin_marks'}
+    return (len(answer.get('selected',[]))==1 and bool(answer.get('review_reasons'))
+            and not answer.get('teacher_review')
+            and not blockers.intersection(answer.get('review_reasons',[]))
+            and not any(c.get('cross_suspected') or c.get('diagonal_clue')
+                        for c in answer.get('mark_clues',{}).values()))
