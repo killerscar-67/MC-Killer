@@ -8,6 +8,49 @@
 - Production retains its existing OCR engine/profile defaults; Tesseract subprocess calls now have a 30-second timeout. PaddleOCR is not a production dependency and exceeded the current server memory budget in the local experiment.
 - See docs/OCR_BENCHMARK.md for reproduction and remaining release gates.
 
+## Unreleased
+
+### 2026-10-27: labelled-batch mismatch fixes
+- Retry boundary-limited local row registration within a nine-pixel search, retaining minimum correlation and boundary rejection. Added shifted and still-out-of-range regression cases.
+- Recover small density-supported partial marks as provisional candidates; keep weak-mark review mandatory and reject smaller specks.
+- Add teacher-confirmed cancellation suggestions for extended diagonal evidence when another selected choice remains; preserve every original/current selection and keep ambiguity review.
+- Detector stroke-v2.2 on the now-development 240-label batch: direct agreement 229 -> 233/240; including suggestions 234 -> 240/240; pending rows 67 -> 63, no observed unflagged errors. Seven cancellations still require confirmation. No colour masking or answer-key-based inference.
+- All six earlier sample sheets retain selections and expected cancellation suggestions; no out-of-scope selections. Local suite: 66 tests, 65 passed and PostgreSQL skipped. Not deployed; independent evaluation and full hosted capacity remain outstanding.
+
+
+### 2026-10-27: visual batch confirmation
+- Add explicit selection/confirmation for eligible single-choice cards grouped by question, preserving manual decisions and existing save/audit protections. Ambiguous cancellations, multiple marks, blanks and uncertain alignment remain excluded.
+- Add offline red-annotation impact diagnostic; no production masking or automatic flag suppression. The 12-sheet experiment reduced pending flags 67 to 54 but changed three blank readings and several suggestions, requiring labels before enabling any filtering.
+- 24 of 67 pending rows in the new batch qualify for visual batch confirmation. Latest local suite: 62 tests, 61 passed and PostgreSQL integration skipped.
+
+
+### 2026-10-26: simpler review controls
+- Shortened Pending label, removed redundant Confirm current shortcut, and kept primary choices on one row (scrollable on narrow screens).
+- Place decision buttons to the right of each student’s evidence on wider screens, stacking below on mobile.
+- Changed grouped review to a vertical student list with all question groups initially expanded.
+- Replaced dropdowns with accessible choice buttons for pending, blank and individual options; multiple-selection combinations remain available in an expandable section.
+- Browser-verified one-click selection and highlighted state. Existing transactional saves/audit behaviour is unchanged; 60 local tests, 59 passed and one PostgreSQL integration skipped.
+
+### 2026-10-26: question-grouped teacher review
+- Added an assessment-wide pending-answer page grouped by question, with student identification, row images, original/current readings, dark coverage, reasons and suggestions. Individual sheet review remains available.
+- Teachers can prepare current/suggested/custom decisions and save across students in one transaction. Unchanged answers stay pending; identity flags remain separate.
+- Preserves ownership, CSRF, stale-form rejection, finalization locks, original readings, per-answer teacher records and an audit event. Invalid decisions abort the whole save.
+- Synthetic browser preview verified images and quick-confirm controls. Local suite: 60 tests, 59 passed and PostgreSQL skipped locally. No deployment or change to detector thresholds in this follow-up.
+
+### 2026-10-26: loop/circle refinement
+- Compact cross-out clues now require four diagonal arms plus straight ink support on both sides of each diagonal; arc tangents alone are insufficient. Large crosses retain the surrounding-line path with at least 30 outside-ink pixels.
+- Store straight-diagonal support and detector_version=stroke-v2.1. Suggestions remain provisional and ambiguous patterns remain reviewable.
+- Added ellipse/loop, looped multi-selection and cross-over-loop regressions, alongside existing compact/fill-plus-X tests.
+- Reused three labelled sheets: marked reviews now 16/29 (3, 6, 7), down from initial PR #4's 17/29 and live stroke-v2's 28/29. Candidate selection sets and all three true cancellation suggestions remain correct; intentional B+C has no cancellation suggestion. All 271 intended blanks remain unselected.
+- 57 local tests: 56 passed, PostgreSQL integration skipped. Independent writer/scanner validation and hosting benchmarks remain outstanding; no deployment.
+
+
+- Balanced review policy accepts isolated strokes only with strong local registration, sufficient ink and no competing/cancellation evidence; original diagnostic reasons remain recorded. Conservative policy remains available via layout config.
+- Review screen defaults to unresolved questions with an option to show all decisions. One explicit action confirms only rows flagged solely as blank, with the existing audit trail and stale-form protection.
+- Three reused labelled sheets: marked-question review flags reduced from 28/29 to 17/29; all selections and three cancellation suggestions unchanged, all 271 blanks remain unselected. These are development regressions, not independent accuracy estimates.
+- Local suite: 54 tests, 53 passed and PostgreSQL integration skipped locally. Handwriting OCR and broader capacity/accuracy validation remain outstanding.
+
+
 ## 2026-10-23
 
 ### Added

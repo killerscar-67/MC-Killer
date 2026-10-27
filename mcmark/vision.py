@@ -37,6 +37,26 @@ def surrounding_ink(gray, template, grid, center, config):
     return {'outside_ink_pixels':count, 'cross_suspected':len(slopes)==2}
 
 
+def diagonal_support(ink, center):
+    """Require straight ink through both sides, not curved arc tangents."""
+    x,y=center
+    supports=[]
+    for sign in (-1,1):
+        best=0.0
+        for slope in (.6,.8,1.0,1.2):
+            sides=[]
+            for side in (-1,1):
+                hits=[]
+                for distance in range(3,8):
+                    px=round(x+side*distance);py=round(y+sign*slope*side*distance)
+                    region=ink[max(0,py-1):py+2,max(0,px-1):px+2]
+                    hits.append(bool(region.size and np.any(region)))
+                sides.append(sum(hits)/len(hits))
+            best=max(best,min(sides))
+        supports.append(best)
+    return supports
+
+
 def stroke_features(gray, template, grid, center, config):
     """Template-subtracted candidate strokes; cancellation is always provisional."""
     x,y = center
@@ -99,9 +119,12 @@ def stroke_features(gray, template, grid, center, config):
             if all(np.count_nonzero(line_ink[band & ((xx-x)*side>=3)])>=2 for side in (-1,1)):
                 supported=True
         arms.append(supported)
-    cross=cross or all(arms)
+    support=diagonal_support(line_ink,(x-left,y-top))
+    straight=[value>=.8 for value in support]
+    cross=(cross or all(arms)) and all(arms) and all(straight)
     return {'new_ink_pixels':int(inner.sum()),'stroke_area':area,'stroke_span':span,
-            'thin_candidate':bool(thin),'diagonal_clue':bool(any(arms)), 'compact_cross_suspected':bool(cross)}
+            'thin_candidate':bool(thin),'diagonal_clue':bool(any(arms) and any(straight)), 'compact_cross_suspected':bool(cross),
+            'straight_diagonal_support':support}
 
 
 def pages(path):
@@ -181,6 +204,32 @@ def align(gray, config, return_transform=False):
     return finish(matrix)
 
 
+def apply_review_policy(reading, config):
+    """Accept isolated, well-registered strokes; preserve all ambiguous evidence."""
+    reading['review_policy'] = 'balanced-v1'
+    reading['original_review_reasons'] = list(reading['review_reasons'])
+    if config.get('review_policy') == 'conservative':
+        reading['review_policy'] = 'conservative'
+        return reading
+    selected = reading['selected']
+    reasons = set(reading['review_reasons'])
+    # Never suppress competing ink, cancellation clues or failed registration.
+    if len(selected) != 1 or reasons - {'uncertain_density', 'faint_or_partial_mark', 'thin_stroke_candidate'}:
+        return reading
+    label = selected[0]
+    clues = reading.get('mark_clues', {})
+    mark = clues.get(label, {})
+    if (reading.get('alignment_score', 0) >= .70
+        and reading['densities'][label] >= .08
+        and mark.get('stroke_area', 0) >= 12
+        and mark.get('stroke_span', 0) >= 7
+        and not mark.get('cross_suspected') and not mark.get('diagonal_clue')
+        and all(c.get('new_ink_pixels', 0) <= 2 for option,c in clues.items() if option != label)):
+        reading['review_reasons'] = []
+        reading['auto_accept_reason'] = 'isolated_registered_stroke'
+    return reading
+
+
 def detect(gray, grid, config):
     # Global homography can leave a few pixels of local drift. Register each
     # printed question row before sampling a four-pixel-high box interior.
@@ -193,6 +242,17 @@ def detect(gray, grid, config):
         window=gray[top-pad:bottom+pad,left-pad:right+pad]
         match=cv2.matchTemplate(window,target,cv2.TM_CCOEFF_NORMED)
         _,score,_,position=cv2.minMaxLoc(match);dx,dy=position[0]-pad,position[1]-pad
+        # A boundary match can indicate residual drift rather than blank ink.
+        # Retry within a bounded radius, retaining score and boundary guards.
+        if abs(dx)==pad or abs(dy)==pad:
+            retry_pad=9
+            if top>=retry_pad and left>=retry_pad and right+retry_pad<=gray.shape[1] and bottom+retry_pad<=gray.shape[0]:
+                retry_window=gray[top-retry_pad:bottom+retry_pad,left-retry_pad:right+retry_pad]
+                retry=cv2.matchTemplate(retry_window,target,cv2.TM_CCOEFF_NORMED)
+                _,retry_score,_,retry_position=cv2.minMaxLoc(retry)
+                if retry_score>=score:
+                    window=retry_window;pad=retry_pad;score=retry_score;position=retry_position
+                    dx,dy=position[0]-pad,position[1]-pad
         patch=window[position[1]:position[1]+target.shape[0],position[0]:position[0]+target.shape[1]]
         local_grid={**grid,'centers':[[x-left,y-top] for x,y in grid['centers']]}
         if score<.45 or abs(dx)==pad or abs(dy)==pad:
@@ -200,8 +260,8 @@ def detect(gray, grid, config):
             reading['review_reasons'].append('uncertain_local_alignment')
         else:
             reading=detect(patch,local_grid,{**config,'_local_aligned':True,'_template_array':target})
-        reading['local_offset']=[dx,dy];reading['alignment_score']=float(score)
-        return reading
+        reading['local_offset']=[dx,dy];reading['alignment_score']=float(score);reading['local_search_radius']=pad
+        return apply_review_policy(reading,config)
     radius = grid.get('radius', config.get('radius', 10)) * .65
     densities = {}
     for label,(x,y) in zip(grid['labels'],grid['centers']):
@@ -254,15 +314,20 @@ def detect(gray, grid, config):
             feature=stroke_features(gray,template,grid,center,config)
             clue=clues.setdefault(label,{})
             clue.update(feature)
-            clue['cross_suspected']=bool(clue.get('cross_suspected') or feature['compact_cross_suspected'])
+            clue['cross_suspected']=bool(feature['compact_cross_suspected'] or (clue.get('cross_suspected') and clue.get('outside_ink_pixels',0)>=30))
             if clue['cross_suspected']:
                 reasons.append('possible_cross_out')
             elif feature['diagonal_clue']:
                 reasons.append('possible_cancellation_stroke')
-            if label not in selected and (feature['thin_candidate'] or (clue['cross_suspected'] and feature['new_ink_pixels']>=5)):
+            partial=(densities[label]>=.12 and feature['new_ink_pixels']>=3 and feature['stroke_area']>=3 and feature['stroke_span']>=3)
+            clue['partial_density_candidate']=bool(partial)
+            if label not in selected and (feature['thin_candidate'] or partial or (clue['cross_suspected'] and feature['new_ink_pixels']>=5)):
                 thin_candidates.append(label)
                 reasons.append('thin_stroke_candidate')
             clue['state']='likely_cancelled' if clue['cross_suspected'] else 'ambiguous' if feature['diagonal_clue'] else 'active_mark' if label in selected else 'ambiguous' if feature['new_ink_pixels'] else 'blank'
+    if clues and not config.get('_disable_strokes'):
+        reasons=[r for r in reasons if r!='possible_cross_out']
+        if any(c.get('cross_suspected') for c in clues.values()): reasons.append('possible_cross_out')
     if len(thin_candidates)==1:
         selected.append(thin_candidates[0])
         clues[thin_candidates[0]]['state']='ambiguous' if clues[thin_candidates[0]]['diagonal_clue'] else 'active_mark'
@@ -275,10 +340,17 @@ def detect(gray, grid, config):
     remaining = [label for label in selected if label not in crossed]
     for label in crossed:
         clues[label]['state']='likely_cancelled' if remaining else 'ambiguous'
+    extended_diagonals=[label for label in selected if clues.get(label,{}).get('diagonal_clue')
+        and clues[label].get('outside_ink_pixels',0)>=20
+        and all(v>=.8 for v in clues[label].get('straight_diagonal_support',[0,0]))]
+    cancellation_candidates=set(crossed)|set(extended_diagonals)
+    suggestion_remaining=[label for label in selected if label not in cancellation_candidates]
+    suggestion=(suggestion_remaining if cancellation_candidates and len(selected)>1 and len(suggestion_remaining)==1 and len(thin_candidates)<=1
+        else remaining if (crossed or len(thin_candidates)==1) and len(remaining)==1 and len(thin_candidates)<=1 else None)
     return {'selected':selected, 'raw_selected':raw_selected, 'densities':densities,
             'uncertain':uncertain, 'mark_clues':clues, 'review_reasons':list(dict.fromkeys(reasons)),
-            'detector_version':'stroke-v2', 'thin_candidates':thin_candidates,
-            'suggested_selected':remaining if (crossed or len(thin_candidates)==1) and len(remaining)==1 and len(thin_candidates)<=1 else None}
+            'detector_version':'stroke-v2.2', 'thin_candidates':thin_candidates,
+            'suggested_selected':suggestion, 'suggestion_basis':'extended_diagonal' if extended_diagonals and suggestion else 'cross_or_thin' if suggestion else None}
 
 
 
