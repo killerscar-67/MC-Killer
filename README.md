@@ -15,6 +15,10 @@ A teacher workspace for scanning, marking and reviewing multiple-choice answer s
 
 See [today's changelog](CHANGELOG.md) and [continuation notes](docs/HANDOFF.md) to resume on another device. Never copy secrets or student scans into Git.
 
+## OCR experiments (draft PR #5)
+
+[Offline OCR benchmark](docs/OCR_BENCHMARK.md) compares original-resolution field crops, field-specific Tesseract settings and an optional local PaddleOCR model. No new recognition engine/profile is enabled for teachers. Reference field labels, independent validation and hosted memory checks remain required. Keep all student inputs and results outside Git.
+
 ## Teacher workflow
 
 1. Sign in with an approved `@deliahw2.edu.hk` Google Workspace account.

@@ -9,6 +9,9 @@ description = "Configurable optical MCQ marking and class analytics"
 requires-python = ">=3.9"
 dependencies = ["numpy", "opencv-python-headless", "Pillow", "pymupdf", "pytesseract", "Flask>=3.0,<4", "waitress>=3,<4", "Authlib>=1.6,<2", "requests>=2.32,<3", "psycopg[binary]>=3.2,<4", "psycopg-pool>=3.2,<4"]
 
+[project.optional-dependencies]
+ocr-benchmark = ["tesserocr==2.12.0"]
+
 [project.scripts]
 mcmark = "mcmark.cli:main"
 mc-killer = "mcmark.web:main"

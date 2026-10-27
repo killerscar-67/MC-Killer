@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-27 — OCR draft, offline only
+
+- Added original-resolution field crops using the registered page transform, five controlled Tesseract variants, optional native Tesseract binding, and a separate local-model PaddleOCR comparison runner.
+- Preserved raw text separately from format-checked values; recorded model hashes, timings, diagnostic statuses and process peak memory. No automatic roster assignment or OCR engine switch.
+- Compared 60 private fields from 12 sheets. Written-field accuracy remains unmeasured pending teacher transcriptions; private scans, crops, rosters and OCR outputs are excluded from the repository.
+- Production retains its existing OCR engine/profile defaults; Tesseract subprocess calls now have a 30-second timeout. PaddleOCR is not a production dependency and exceeded the current server memory budget in the local experiment.
+- See docs/OCR_BENCHMARK.md for reproduction and remaining release gates.
+
 ## 2026-10-23
 
 ### Added

@@ -1,6 +1,6 @@
 # Handwritten metadata OCR improvement plan
 
-Status: draft scope only, opened 2026-10-27. No OCR engine, production behaviour or dependency changes are implemented in this commit. This work starts from main and is independent of the marking/review changes in PR #4.
+Status: offline benchmark implemented on 2026-10-27; production engine/profile selection remains unchanged. See OCR_BENCHMARK.md for commands, measured diagnostics and remaining validation. This work is independent of the marking/review changes in PR #4.
 
 ## Problem and baseline
 
@@ -18,22 +18,22 @@ The six existing development samples are not independent evaluation data. The pr
 - [ ] Keep PDFs, crops, rosters, student identifiers, raw OCR outputs and reference transcriptions out of the public repository.
 
 ### Higher-quality crops and preprocessing
-- [ ] Preserve registration transforms and map field zones back to original-resolution pixels; avoid inventing extra detail by enlarging an already downsampled crop.
-- [ ] Retain the untouched evidence crop alongside any recognition variant.
+- [x] Preserve registration transforms and map field zones back to original-resolution pixels; avoid inventing extra detail by enlarging an already downsampled crop.
+- [x] Retain the untouched evidence crop alongside any recognition variant.
 - [ ] Evaluate grayscale/contrast variants, deskew and printed-border suppression without erasing faint strokes or characters crossing a border.
 - [ ] Add blank-field detection with checks against faint handwriting; distinguish blank, illegible, error and recognized states.
 
 ### Field-specific recognition
-- [ ] Pass field context to OCR: class allows digits and uppercase letters; class number allows digits; names allow English/Traditional Chinese.
-- [ ] Preserve raw text and record normalized text separately. Do not silently replace O/0, I/1, S/5 or similar ambiguous characters to produce a plausible identity.
-- [ ] Validate class format and number format without treating a valid-looking result as proof of the correct student.
+- [x] Pass field context to OCR: class allows digits and uppercase letters; class number allows digits; names allow English/Traditional Chinese.
+- [x] Preserve raw text and record normalized text separately. Do not silently replace O/0, I/1, S/5 or similar ambiguous characters to produce a plausible identity.
+- [x] Validate class format and number format without treating a valid-looking result as proof of the correct student.
 - [ ] Use assessment subject as comparison context, not as a substitute for the written subject.
 - [ ] Preserve the signature image and attempted transcription. Decide its review policy explicitly; text recognition must never be represented as signature authentication.
 
 ### Engine comparison
 - [ ] Add an optional local PaddleOCR adapter in a separate, pinned benchmark environment; compare it with Tesseract on identical crops/reference labels.
-- [ ] Record engine/model versions and preprocessing parameters. Confidence values from different engines are not directly interchangeable.
-- [ ] Keep production defaults unchanged until accuracy and resource checks pass.
+- [x] Record engine/model versions and preprocessing parameters. Confidence values from different engines are not directly interchangeable.
+- [x] Keep production defaults unchanged until accuracy and resource checks pass.
 - [ ] Treat cloud OCR as a later opt-in option requiring explicit authorization for named field images and provider, plus reviewed cost/data handling. No external uploads in this draft.
 
 ### Roster-assisted identity (separate milestone)
@@ -53,3 +53,7 @@ The six existing development samples are not independent evaluation data. The pr
 - [ ] Teacher pilot confirms fewer identity edits without increased wrong student matches.
 
 Numerical release targets should be agreed after a reliable labelled baseline is established. No handwriting accuracy or hosting-capacity gain is claimed by this planning commit.
+
+## First offline experiment
+
+The 12-page batch produced 60 field crops and five Tesseract variants (300 readings); PaddleOCR recognition compared three image variants (180 readings). No registration/recognition errors occurred. Neither engine is approved for deployment: written-field reference labels and independent validation are outstanding. PaddleOCR process peak RSS was about 880 MB on macOS, exceeding the hosted service's 512 MB budget before adding the web worker. The >=70 confidence/format diagnostic is not accuracy or an engine-independent acceptance threshold. Blank-field detection, roster matching, calibrated thresholds and hosted capacity remain unimplemented/unvalidated.
