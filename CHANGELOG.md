@@ -1,12 +1,13 @@
 # Changelog
 
-## 2026-10-27 — OCR draft, offline only
+## 2026-10-27 — Roster-order identity workflow (PR #5)
 
-- Added original-resolution field crops using the registered page transform, five controlled Tesseract variants, optional native Tesseract binding, and a separate local-model PaddleOCR comparison runner.
-- Preserved raw text separately from format-checked values; recorded model hashes, timings, diagnostic statuses and process peak memory. No automatic roster assignment or OCR engine switch.
-- Compared 60 private fields from 12 sheets. Written-field accuracy remains unmeasured pending teacher transcriptions; private scans, crops, rosters and OCR outputs are excluded from the repository.
-- Production retains its existing OCR engine/profile defaults; Tesseract subprocess calls now have a 30-second timeout. PaddleOCR is not a production dependency and exceeded the current server memory budget in the local experiment.
-- See docs/OCR_BENCHMARK.md for reproduction and remaining release gates.
+- Replaced the OCR-experiment scope with class-list CSV preview, numeric class-number order and explicit absence selection.
+- New web assessments require sheet count to equal non-absent students and assign names/classes/numbers from the confirmed roster snapshot.
+- Skip all handwritten-field OCR in roster mode while retaining five written-field image crops; subject comes from assessment details.
+- Added attendance/submission table and private UTF-8 CSV export, roster confirmation/assignment audit, read-only roster identities and post-processing count checks.
+- Existing assessments and legacy CLI/API configurations keep their previous OCR workflow. No roster migration, model download or deployment is included.
+- See docs/ROSTER_ORDER.md for ordering and file-format requirements.
 
 ## Unreleased
 
@@ -49,7 +50,6 @@
 - Review screen defaults to unresolved questions with an option to show all decisions. One explicit action confirms only rows flagged solely as blank, with the existing audit trail and stale-form protection.
 - Three reused labelled sheets: marked-question review flags reduced from 28/29 to 17/29; all selections and three cancellation suggestions unchanged, all 271 blanks remain unselected. These are development regressions, not independent accuracy estimates.
 - Local suite: 54 tests, 53 passed and PostgreSQL integration skipped locally. Handwriting OCR and broader capacity/accuracy validation remain outstanding.
-
 
 ## 2026-10-23
 

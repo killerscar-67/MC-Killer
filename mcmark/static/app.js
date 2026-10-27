@@ -1,11 +1,55 @@
 if (document.querySelector('[data-poll]')) {
   window.setTimeout(() => window.location.reload(), 5000);
 }
-const picker = document.querySelector('input[type=file]');
+const picker = document.querySelector('input[name=scans]');
 if (picker) picker.addEventListener('change', () => {
   const count = picker.files.length;
   picker.closest('label').querySelector('strong').textContent = count ? `${count} file${count === 1 ? '' : 's'} selected` : 'Choose your scanned sheets';
 });
+
+const rosterForm=document.getElementById('roster-assessment');
+if(rosterForm){
+ const file=document.getElementById('roster-file');
+ const preview=document.getElementById('roster-preview');
+ const status=document.getElementById('roster-status');
+ const digest=document.getElementById('roster-digest');
+ const confirmed=document.getElementById('roster-order-confirmed');
+ const start=document.getElementById('start-roster-marking');
+ const button=document.getElementById('preview-roster');
+ let generation=0;
+ const reset=()=>{generation++;preview.replaceChildren();digest.value='';confirmed.checked=false;start.disabled=true;status.textContent='Preview the class list, then mark absentees.';};
+ file.addEventListener('change',reset);
+ confirmed.addEventListener('change',()=>{start.disabled=!digest.value || !confirmed.checked;});
+ button.addEventListener('click',async()=>{
+  reset();const current=generation;
+  if(!file.files.length){status.textContent='Choose a class-list CSV first.';return;}
+  const data=new FormData();data.append('csrf',rosterForm.elements.csrf.value);data.append('roster',file.files[0]);
+  button.disabled=true;
+  try{
+   const response=await fetch(button.dataset.url,{method:'POST',body:data});
+   if(!response.headers.get('content-type')?.includes('application/json'))throw new Error('Sign in again and preview the class list.');
+   const result=await response.json();if(current!==generation)return;
+   if(!response.ok)throw new Error(result.error||'Cannot preview the class list.');
+   digest.value=result.digest;
+   const table=document.createElement('table');
+   const head=document.createElement('thead');const headers=document.createElement('tr');
+   ['Absent','Class','Number','Name'].forEach(text=>{const cell=document.createElement('th');cell.textContent=text;headers.append(cell);});head.append(headers);table.append(head);
+   const body=document.createElement('tbody');
+   const update=()=>{confirmed.checked=false;start.disabled=true;const absent=preview.querySelectorAll('input:checked').length;status.textContent=`${result.students.length} students · ${absent} absent · ${result.students.length-absent} exam sheets expected.`;};
+   result.students.forEach(student=>{
+    const row=document.createElement('tr');const cell=document.createElement('td');const input=document.createElement('input');
+    input.type='checkbox';input.name='absent';input.value=student.student_id;input.setAttribute('aria-label',`Absent: ${student.student_id} ${student.name}`);input.addEventListener('change',update);cell.append(input);row.append(cell);
+    [student.class,student.student_id,student.name].forEach(text=>{const td=document.createElement('td');td.textContent=text;row.append(td);});body.append(row);
+   });table.append(body);preview.append(table);update();
+  }catch(error){if(current===generation){digest.value='';status.textContent=error.message;start.disabled=true;}}
+  finally{button.disabled=false;}
+ });
+ picker?.addEventListener('change',()=>{
+  const order=document.getElementById('scan-order');order.replaceChildren();
+  Array.from(picker.files).forEach(file=>{const item=document.createElement('li');item.textContent=file.name;order.append(item);});
+  confirmed.checked=false;start.disabled=true;
+ });
+}
 
 const pendingFilter=document.getElementById('pending-only');
 if(pendingFilter){

@@ -8,24 +8,27 @@ A teacher workspace for scanning, marking and reviewing multiple-choice answer s
 - Northflank: HW2 / Default / MC-Killer, US Central, free `nf-compute-20` (0.2 shared vCPU, 512 MB RAM, 2 GB ephemeral storage).
 - Database: Supabase AC / MC-killer, Singapore, private `mc_killer` schema. Initial migration applied and recorded.
 - Google login: verified `@deliahw2.edu.hk` accounts plus an explicit approved-teacher list. The Google consent screen currently displays WiserLife; a separate MC-Killer OAuth configuration is still recommended.
-- OCR: Tesseract English + Traditional Chinese on Linux. All five written fields are retained; readings below 70, blanks, errors and invalid identity formats require review. Confidence is not a calibrated correctness probability.
+- Legacy OCR: Tesseract English + Traditional Chinese on Linux. Older assessments retain confidence/format review; the new roster-order workflow retains all written images without calling OCR.
 - Class is digits followed by one uppercase letter; class number is digits only. Spaces/case are normalized, leading zeros retained, and ambiguous characters are not guessed.
 
 **New hosted uploads use private persistent Supabase Storage (23 October 2026).** Originals and review evidence are saved outside the container. Development defaults to local mode. Three pre-existing assessment records had no local scan files at setup; their missing images could not be migrated. See [storage setup and migration](docs/STORAGE.md).
 
 See [today's changelog](CHANGELOG.md) and [continuation notes](docs/HANDOFF.md) to resume on another device. Never copy secrets or student scans into Git.
 
-## OCR experiments (draft PR #5)
-
-[Offline OCR benchmark](docs/OCR_BENCHMARK.md) compares original-resolution field crops, field-specific Tesseract settings and an optional local PaddleOCR model. No new recognition engine/profile is enabled for teachers. Reference field labels, independent validation and hosted memory checks remain required. Keep all student inputs and results outside Git.
-
 ## Teacher workflow
 
+New assessments use [class-list order and absences](docs/ROSTER_ORDER.md) for
+student identities. Upload a UTF-8 CSV with `class,number,name`, preview the sorted
+list, mark absentees, and scan papers in that order. Sheet count must match students
+sitting the exam. Names/class/numbers come from the roster; all handwritten-field
+images are retained without OCR. Attendance/submission CSV is available afterward.
+Existing assessments retain their original OCR/review behavior.
+
 1. Sign in with an approved `@deliahw2.edu.hk` Google Workspace account.
-2. Create an assessment: title, subject, level, 1–100 questions, answer sequence, wrong-answer deduction, and passing percentage.
-3. Upload upright PDF or image scans, including a whole class in one multipage PDF.
+2. Create an assessment with its title, subject, answer key and scoring; preview the class list and mark absentees.
+3. Upload upright scans in class-number order, skipping absentees. Confirm that sheet count matches students sitting the exam.
 4. Return to the assessment after background processing completes.
-5. Review flagged question images and all five written fields: name, signature, class, class number, subject/paper.
+5. Review flagged question images. Names/classes/numbers are assigned from the roster; handwritten-field images remain available for reference.
 6. Save teacher decisions. Scores and class/item statistics are recalculated; original readings and an audit trail remain available.
 7. Resolve every flag, finalize to lock results, and download CSV or full evidence JSON.
 

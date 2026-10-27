@@ -141,13 +141,9 @@ def pages(path):
                 yield index+1, np.array(ImageOps.exif_transpose(frame).convert('L'))
 
 
-def align(gray, config, return_transform=False):
+def align(gray, config):
     w,h = config['page_size']
     scaled = cv2.resize(gray, (w,h))
-    source_scale=np.diag([w/gray.shape[1],h/gray.shape[0],1.0])
-    def finish(matrix):
-        registered=cv2.warpPerspective(scaled,matrix,(w,h),borderValue=255)
-        return (registered,matrix @ source_scale) if return_transform else registered
     if config.get('template_image'):
         template = config['_template_array'] if '_template_array' in config else load_template(config['template_image'])
         if template is None or template.shape != (h, w):
@@ -180,10 +176,10 @@ def align(gray, config, return_transform=False):
             if np.max(np.linalg.norm(projected-corners[0],axis=1))>min(w,h)*.2:
                 failure='Sheet rotation/crop exceeds supported registration range'
                 continue
-            return finish(matrix)
+            return cv2.warpPerspective(scaled,matrix,(w,h),borderValue=255)
         raise ValueError(failure)
     if not config.get('fiducials'):
-        return (scaled,source_scale) if return_transform else scaled
+        return scaled
     _, binary = cv2.threshold(scaled, 0, 255, cv2.THRESH_BINARY_INV+cv2.THRESH_OTSU)
     contours,_ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     candidates = []
@@ -201,7 +197,7 @@ def align(gray, config, return_transform=False):
     if len(set(chosen)) != 4:
         raise ValueError('Registration requires four distinct markers')
     matrix = cv2.getPerspectiveTransform(np.float32(chosen), np.float32(config['fiducials']))
-    return finish(matrix)
+    return cv2.warpPerspective(scaled, matrix, (w,h), borderValue=255)
 
 
 def apply_review_policy(reading, config):
@@ -383,6 +379,10 @@ def metadata(gray, config, log, evidence_dir=None, evidence_prefix="sheet"):
                 if not cv2.imwrite(str(destination), evidence):
                     raise OSError(f'Could not save metadata evidence: {destination}')
                 detail['crop'] = str(destination.resolve())
+            if config.get('identity_mode')=='roster':
+                result[name]=''
+                detail.update(status='image_only',raw_text='',identity_source='roster_order')
+                continue
             try:
                 from .ocr import recognize
                 text = recognize(crop, config.get('ocr_engine','auto'))
