@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### 2026-10-27: labelled-batch mismatch fixes
+- Retry boundary-limited local row registration within a nine-pixel search, retaining minimum correlation and boundary rejection. Added shifted and still-out-of-range regression cases.
+- Recover small density-supported partial marks as provisional candidates; keep weak-mark review mandatory and reject smaller specks.
+- Add teacher-confirmed cancellation suggestions for extended diagonal evidence when another selected choice remains; preserve every original/current selection and keep ambiguity review.
+- Detector stroke-v2.2 on the now-development 240-label batch: direct agreement 229 -> 233/240; including suggestions 234 -> 240/240; pending rows 67 -> 63, no observed unflagged errors. Seven cancellations still require confirmation. No colour masking or answer-key-based inference.
+- All six earlier sample sheets retain selections and expected cancellation suggestions; no out-of-scope selections. Local suite: 66 tests, 65 passed and PostgreSQL skipped. Not deployed; independent evaluation and full hosted capacity remain outstanding.
+
+
 ### 2026-10-27: visual batch confirmation
 - Add explicit selection/confirmation for eligible single-choice cards grouped by question, preserving manual decisions and existing save/audit protections. Ambiguous cancellations, multiple marks, blanks and uncertain alignment remain excluded.
 - Add offline red-annotation impact diagnostic; no production masking or automatic flag suppression. The 12-sheet experiment reduced pending flags 67 to 54 but changed three blank readings and several suggestions, requiring labels before enabling any filtering.

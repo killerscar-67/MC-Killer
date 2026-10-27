@@ -227,6 +227,49 @@ class MarkReviewTests(unittest.TestCase):
         self.assertIn('possible_cross_out',result['review_reasons'])
         self.assertIsNone(result['suggested_selected'])
 
+    def test_bounded_local_retry_recovers_residual_drift(self):
+        from mcmark.vision import detect
+        import numpy as np
+        for dx,dy in ((6,-7),(-7,6),(8,0)):
+            with self.subTest(offset=(dx,dy)):
+                sheet=self.blank.copy();self.fill(sheet,'C')
+                shifted=self.cv2.warpAffine(sheet,np.float32([[1,0,dx],[0,1,dy]]),(sheet.shape[1],sheet.shape[0]),borderValue=255)
+                result=detect(shifted,self.q,self.config)
+                self.assertEqual(result['selected'],['C'])
+                self.assertEqual(result['local_offset'],[dx,dy])
+                self.assertEqual(result['local_search_radius'],9)
+                self.assertNotIn('uncertain_local_alignment',result['review_reasons'])
+
+    def test_retry_search_boundary_still_requires_review(self):
+        from mcmark.vision import detect
+        import numpy as np
+        sheet=self.blank.copy();self.fill(sheet,'C')
+        shifted=self.cv2.warpAffine(sheet,np.float32([[1,0,0],[0,1,9]]),(sheet.shape[1],sheet.shape[0]),borderValue=255)
+        result=detect(shifted,self.q,self.config)
+        self.assertIn('uncertain_local_alignment',result['review_reasons'])
+        self.assertFalse(result.get('auto_accept_reason'))
+
+    def test_small_partial_mark_is_provisional_but_nearby_speck_is_not(self):
+        from mcmark.vision import detect
+        x,y=map(round,self.q['centers'][3])
+        for offset,expected in ((-2,['D']),(-3,[])):
+            sheet=self.blank.copy()
+            self.cv2.rectangle(sheet,(x,y+offset),(x+2,y+offset+2),0,-1)
+            result=detect(sheet,self.q,self.config)
+            self.assertEqual(result['selected'],expected)
+            self.assertTrue(result['review_reasons'])
+            self.assertFalse(result.get('auto_accept_reason'))
+
+    def test_extended_diagonal_never_discards_current_choices(self):
+        from mcmark.vision import detect
+        sheet=self.blank.copy();self.fill(sheet,'A');self.fill(sheet,'C')
+        x,y=map(round,self.q['centers'][2])
+        self.cv2.line(sheet,(x-10,y-10),(x+10,y+10),0,2)
+        result=detect(sheet,self.q,self.config)
+        self.assertEqual(result['selected'],['A','C'])
+        self.assertIn('multiple',result['review_reasons'])
+        self.assertFalse(result.get('auto_accept_reason'))
+
     def test_registration_retries_without_relaxing_geometry(self):
         from mcmark.vision import align
         from unittest.mock import patch
