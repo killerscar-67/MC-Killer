@@ -1,5 +1,7 @@
 # Class-list order and exam submissions
 
+Saved, editable rosters are also available; see [reusable rosters](REUSABLE_ROSTERS.md). No QR identification is required. The one-off CSV path below remains supported.
+
 New web assessments use the teacher's class list as the identity source. Papers
 are stacked in numeric class-number order, skipping absent students. A scanned
 sheet is assigned to the next student who sat the exam. This workflow trusts that
@@ -45,12 +47,12 @@ from handwriting or detect a swapped pair of papers with equal counts.
 
 The roster and absence snapshot belong to the assessment and are stored in its
 existing private database config. Preview requires teacher sign-in and CSRF,
-returns no-cache responses, and does not save the roster separately. Submitted
+returns no-cache responses, and does not save a one-off CSV separately. Selecting a saved roster copies its active students and records the source revision. Submitted
 CSV bytes are parsed again and checked against the preview digest. A roster
 confirmation audit records the digest, absences and expected sheet count; successful
 processing records the assignment count/order. Each result retains its original
 roster assignment and position. Existing ownership checks also protect submission
-exports, image evidence and review changes. No database migration is required.
+exports, image evidence and review changes. Saved reusable rosters require the additive migration documented in REUSABLE_ROSTERS.md; the original one-off CSV format remains unchanged.
 
 Counts are checked again after processing. A failed page does not shift remaining
 student identities into ready results; the batch fails for explicit retry. Original
@@ -58,7 +60,7 @@ scans and handwritten evidence use the existing private scan storage backend.
 
 Existing assessments and legacy CLI/API configurations without roster mode keep
 their previous OCR/review behavior. They are not reprocessed or matched to a new
-class list automatically. New web forms select roster mode. This PR replaces the
+class list automatically. New web forms select roster mode and offer saved rosters or a one-off CSV. This PR replaces the
 offline OCR-experiment scope; no PaddleOCR dependency or model download is added.
 
 All tests and browser checks use synthetic rosters and blank/generated sheets.

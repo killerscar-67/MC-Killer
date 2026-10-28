@@ -48,6 +48,16 @@ class PostgresIntegrationTests(unittest.TestCase):
                 row=dict(file='scan.png',page=1,metadata_details={},sheet_review_issues=[],review_required=True,**grade([{'selected':['B'],'raw_selected':['B'],'review_reasons':['uncertain_density']}],config))
                 db.execute("UPDATE jobs SET state='ready',results=? WHERE id=?",(json.dumps([row]),jid))
                 version=str(job['updated'])
+            roster_response=client.post('/rosters',data={'csrf':'token','title':'PG roster','school_year':'2026-2027'})
+            self.assertEqual(roster_response.status_code,302)
+            rid=roster_response.headers['Location'].rsplit('/',1)[-1]
+            self.assertEqual(client.post('/rosters/'+rid,data={'csrf':'token','version':'1','action':'add','class':'5A','number':'1','english_name':'Synthetic student','active':'true'}).status_code,302)
+            preview=client.post('/roster/preview',data={'csrf':'token','roster_id':rid})
+            self.assertEqual(preview.status_code,200);self.assertEqual(preview.json['version'],2)
+            self.assertEqual(client.get('/rosters/'+rid+'/export').status_code,200)
+            with connect(data) as db:
+                self.assertEqual(db.execute('SELECT version FROM rosters WHERE id=?',(rid,)).fetchone()[0],2)
+                with self.assertRaises(psycopg.errors.InsufficientPrivilege):db.execute('DELETE FROM roster_audit')
             self.assertEqual(client.get('/').status_code,200)
             self.assertEqual(client.get(f'/assessments/{jid}/sheets/0').status_code,200)
             review=client.post(f'/assessments/{jid}/sheets/0/review',data={'csrf':'token','version':version,'q1':'A'})

@@ -32,3 +32,7 @@ Uploaded PDFs/images are parsed within the service process. This pilot validates
 6. Optional vision-model assistance for difficult handwriting/corrections only after the school approves its data flow. Suggestions should remain distinct from teacher-confirmed decisions.
 
 Hosting, school identity provider, roster source and retention requirements need to be selected with school IT. This PR intentionally does not provision paid infrastructure or publish student data.
+
+## PR #5 reusable-roster deployment prerequisite
+
+Apply `supabase/migrations/20261028030452_reusable_rosters.sql` before deploying this draft. New backend-only tables contain private student data and append-only audit history. No job state/schema changes are needed. Do not publish these tables through the Data API. See [reusable roster workflow and rollback](REUSABLE_ROSTERS.md). No QR identification is used.

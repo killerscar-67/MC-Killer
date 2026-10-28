@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-10-28 — Editable reusable rosters (PR #5 draft)
+
+- Added teacher-private saved rosters, CSV/XLSX import with preview/confirmation, manual additions, transfers, withdrawals/reactivation, stable student references and versioned audit history.
+- New assessments can reuse saved rosters and retain independent candidate snapshots. Existing one-off CSV and class-number scan order remain supported. No QR identification or personalised printing is included.
+- Added explicit candidate updates and image-based sheet-to-student reassignment while results remain open, preserving original identities. Submitted/finalised history is not silently rewritten by school roster edits.
+- Added missing-submission exports and complete unique-candidate assignment checks before finalisation.
+- Added an additive backend-only PostgreSQL migration with RLS/audit permissions plus local SQLite support. Migration and deployment remain pending.
+- Added regression coverage for stable references, XLSX/CSV, inactive students, stale/unauthorised edits, snapshots, candidate updates, reassignment and finalisation.
+
 ## 2026-10-27 — Roster-order identity workflow (PR #5)
 
 - Replaced the OCR-experiment scope with class-list CSV preview, numeric class-number order and explicit absence selection.

@@ -15,3 +15,5 @@
 
 .batch-review-tools{display:flex;flex-wrap:wrap;gap:.7rem;align-items:center;margin:1rem 0}.batch-review-tools .hint{flex-basis:100%}
 .roster-upload{grid-column:1/-1}.roster-preview{max-height:360px;overflow:auto;margin:1rem 0}.roster-preview input{width:auto;margin:0}.roster-preview td{padding:10px}.roster-example{white-space:pre-wrap;background:#f3f6f3;padding:12px;border-radius:8px;font-size:12px}
+
+.identity-preview{width:100%;max-width:650px;height:350px;object-fit:cover;object-position:top} .account>a{color:inherit} details>form{margin-top:1rem}

@@ -99,6 +99,10 @@ def initialize(data):
         CREATE TABLE IF NOT EXISTS jobs(id TEXT PRIMARY KEY,owner TEXT NOT NULL REFERENCES users(id),title TEXT NOT NULL,
             subject TEXT NOT NULL,level TEXT NOT NULL,state TEXT NOT NULL,created REAL NOT NULL,updated REAL NOT NULL,
             config TEXT NOT NULL,results TEXT NOT NULL DEFAULT '[]',error TEXT NOT NULL DEFAULT '',finalized INTEGER NOT NULL DEFAULT 0);
+        CREATE TABLE IF NOT EXISTS rosters(id TEXT PRIMARY KEY,owner TEXT NOT NULL REFERENCES users(id),title TEXT NOT NULL,school_year TEXT NOT NULL,version INTEGER NOT NULL DEFAULT 1,students TEXT NOT NULL DEFAULT '[]',created REAL NOT NULL,updated REAL NOT NULL);
+        CREATE TABLE IF NOT EXISTS roster_audit(id INTEGER PRIMARY KEY AUTOINCREMENT,roster TEXT NOT NULL REFERENCES rosters(id),actor TEXT NOT NULL REFERENCES users(id),at REAL NOT NULL,action TEXT NOT NULL,detail TEXT NOT NULL);
+        CREATE INDEX IF NOT EXISTS rosters_owner ON rosters(owner);
+        CREATE INDEX IF NOT EXISTS roster_audit_roster ON roster_audit(roster,id);
         CREATE TABLE IF NOT EXISTS audit(id INTEGER PRIMARY KEY AUTOINCREMENT,job TEXT NOT NULL REFERENCES jobs(id),
             actor TEXT NOT NULL REFERENCES users(id),at REAL NOT NULL,action TEXT NOT NULL,detail TEXT NOT NULL);
         ''')

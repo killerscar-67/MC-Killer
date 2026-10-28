@@ -45,10 +45,11 @@ def roster_digest(rows):
 
 
 def with_absences(rows,absent):
-    numbers={r['student_id'] for r in rows}
+    key='record_id' if all(r.get('record_id') for r in rows) else 'student_id'
+    numbers={r[key] for r in rows}
     if len(absent)!=len(set(absent)) or not set(absent).issubset(numbers):
         raise ValueError('Invalid absence selection. Preview the class list again.')
-    marked=[{**r,'absent':r['student_id'] in absent} for r in rows]
+    marked=[{**r,'absent':r[key] in absent} for r in rows]
     if all(r['absent'] for r in marked):
         raise ValueError('Select at least one student who sat the exam.')
     return marked
@@ -64,11 +65,12 @@ def assign_roster(results,config):
                       **{'class':student['class']},signature='',
                       subject_paper=config.get('assessment_subject',''),
                       identity_source='roster_order',roster_position=position,
-                      roster_assignment={k:student[k] for k in ('name','class','student_id')})
+                      roster_assignment={k:student[k] for k in ('name','class','student_id','record_id','english_name','chinese_name') if k in student})
+        if student.get('record_id'):result['student_record_id']=student['record_id']
 
 
 def submission_csv(config,results):
-    if len(results)!=sum(not student['absent'] for student in config['roster']):
+    if not config.get('roster_snapshot_version') and len(results)!=sum(not student['absent'] for student in config['roster']):
         raise ValueError('Submission record requires one processed sheet per student sitting the exam.')
     stream=io.StringIO(newline='')
     writer=csv.writer(stream)
@@ -76,9 +78,10 @@ def submission_csv(config,results):
     sheet=0
     for student in config['roster']:
         if not student['absent']: sheet+=1
+        assigned=next((i+1 for i,r in enumerate(results) if r.get('student_record_id')==student.get('record_id')),None) if config.get('roster_snapshot_version') else sheet
         values=[student['class'],student['student_id'],student['name'],
                 'Absent' if student['absent'] else 'Present',
-                'Not expected' if student['absent'] else 'Submitted',
-                '' if student['absent'] else sheet]
+                'Not expected' if student['absent'] else 'Submitted' if assigned else 'Not submitted',
+                '' if student['absent'] else assigned or '']
         writer.writerow(["'"+v if isinstance(v,str) and v.lstrip().startswith(('=','+','-','@')) else v for v in values])
     return ('\ufeff'+stream.getvalue()).encode('utf-8')

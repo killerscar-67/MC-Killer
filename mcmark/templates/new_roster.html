@@ -13,8 +13,8 @@
 </div>
 <section class="card">
 <h2><span class="step-number">3</span> Class list &amp; absences</h2>
-<label>Class-list CSV<input type="file" name="roster" id="roster-file" accept=".csv,text/csv" required></label>
-<p class="hint">Export as UTF-8 CSV with <strong>class, number, name</strong> columns. One class per assessment. Students are sorted by numeric class number; leading zeros are kept.</p>
+<label>Saved roster<select name="roster_id" id="saved-roster-source"><option value="">Upload a one-off CSV instead</option>{% for r in rosters %}<option value="{{r.id}}" {{'selected' if request.args.get('roster')==r.id}}>{{r.title}} · {{r.school_year}}</option>{% endfor %}</select></label><input type="hidden" name="roster_version" id="saved-roster-version"><p><a href="{{url_for('lists.index')}}">Add or edit saved rosters</a>. Roster changes do not alter past assessments.</p><label>One-off class-list CSV<input type="file" name="roster" id="roster-file" accept=".csv,text/csv"></label>
+<p class="hint">Export as UTF-8 CSV with <strong>class, number, name</strong> columns. One class per CSV; saved rosters can include several classes. Students are sorted by class and numeric class number; leading zeros are kept.</p>
 <pre class="roster-example">class,number,name
 3A,01,Example Student
 3A,02,Another Student</pre>

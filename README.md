@@ -6,7 +6,7 @@ A teacher workspace for scanning, marking and reviewing multiple-choice answer s
 
 - Website: https://mc-killer.pages.dev — Cloudflare Pages gateway to the Python service on Northflank.
 - Northflank: HW2 / Default / MC-Killer, US Central, free `nf-compute-20` (0.2 shared vCPU, 512 MB RAM, 2 GB ephemeral storage).
-- Database: Supabase AC / MC-killer, Singapore, private `mc_killer` schema. Initial migration applied and recorded.
+- Database: Supabase AC / MC-killer, Singapore, private `mc_killer` schema. Initial migration applied and recorded. Draft reusable-roster migration must be applied before deploying PR #5.
 - Google login: verified `@deliahw2.edu.hk` accounts plus an explicit approved-teacher list. The Google consent screen currently displays WiserLife; a separate MC-Killer OAuth configuration is still recommended.
 - Legacy OCR: Tesseract English + Traditional Chinese on Linux. Older assessments retain confidence/format review; the new roster-order workflow retains all written images without calling OCR.
 - Class is digits followed by one uppercase letter; class number is digits only. Spaces/case are normalized, leading zeros retained, and ambiguous characters are not guessed.
@@ -17,12 +17,13 @@ See [today's changelog](CHANGELOG.md) and [continuation notes](docs/HANDOFF.md) 
 
 ## Teacher workflow
 
-New assessments use [class-list order and absences](docs/ROSTER_ORDER.md) for
-student identities. Upload a UTF-8 CSV with `class,number,name`, preview the sorted
-list, mark absentees, and scan papers in that order. Sheet count must match students
-sitting the exam. Names/class/numbers come from the roster; all handwritten-field
-images are retained without OCR. Attendance/submission CSV is available afterward.
-Existing assessments retain their original OCR/review behavior.
+Use [editable reusable rosters](docs/REUSABLE_ROSTERS.md) to import a class once,
+add or withdraw students during the year, and select the saved list for each
+assessment. Each exam keeps its own snapshot. Preview absences, arrange ordinary
+answer sheets in the displayed class/number order, then upload scans. All five
+written-field images remain available without handwriting OCR. No QR codes or
+school-provided identification feature is required. Existing one-off CSV and
+legacy assessments remain supported. See [scan-order instructions](docs/ROSTER_ORDER.md).
 
 1. Sign in with an approved `@deliahw2.edu.hk` Google Workspace account.
 2. Create an assessment with its title, subject, answer key and scoring; preview the class list and mark absentees.
