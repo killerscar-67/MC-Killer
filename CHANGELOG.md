@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-29 — Assessment-wide answer review
+
+- Added Select eligible single choices and Confirm selected current choices controls across all questions, retaining question-level controls.
+- Bulk selection loads eligible evidence images, including offscreen/lazy images, before selecting rows. Missing/broken images stay excluded.
+- Existing manual decisions are kept. Cancellation, multiple, blank and alignment eligibility rules remain unchanged. Decisions still require Save selected decisions & recalculate; no automatic finalisation.
+
 ## 2026-10-29 — Paste and edit rosters in the browser
 
 - Moved roster renaming and school-year editing to a visible form near the title; history remains separately collapsible.

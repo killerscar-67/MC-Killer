@@ -161,6 +161,10 @@ class TeacherWebTests(unittest.TestCase):
         page=self.client.get(f'/assessments/{jid}/review')
         self.assertEqual(page.status_code,200)
         self.assertEqual(page.data.count(b'data-batch-choice'),1)
+        self.assertIn(b'aria-label="Assessment-wide review"',page.data)
+        self.assertIn(b'data-batch-select data-batch-all',page.data)
+        self.assertIn(b'data-batch-prepare data-batch-all',page.data)
+        self.assertEqual(page.data.count(b'data-batch-select'),2) # assessment and question
         self.assertIn(b'data-field="decision-s0q2"',page.data)
         self.assertNotIn(b'data-field="decision-s1q2"',page.data)
         self.assertIn(b'value="" checked',page.data)
@@ -173,6 +177,7 @@ class TeacherWebTests(unittest.TestCase):
         self.assertEqual(other.post(f'/assessments/{jid}/review',data={'csrf':'token','version':version}).status_code,404)
         self.assertEqual(self.client.post(f'/assessments/{jid}/review',data={'version':version}).status_code,400)
         with connect(self.data) as db:db.execute('UPDATE jobs SET finalized=1 WHERE id=?',(jid,))
+        self.assertNotIn(b'data-batch-all',self.client.get(f'/assessments/{jid}/review').data)
         self.assertEqual(self.client.post(f'/assessments/{jid}/review',data={'csrf':self.csrf,'version':version,'s0q2':'B'}).status_code,409)
 
     def test_disguised_and_nonfinite_uploads_rejected(self):
