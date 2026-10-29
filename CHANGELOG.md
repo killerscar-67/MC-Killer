@@ -2,6 +2,7 @@
 
 ## 2026-10-29 — Paste and edit rosters in the browser
 
+- Moved roster renaming and school-year editing to a visible form near the title; history remains separately collapsible.
 - Added an editable roster grid: paste rows directly from Excel or Google Sheets, with optional headers, English/Chinese names and leading-zero class numbers. File uploads remain available.
 - Saved rows retain permanent references; teachers can edit transfers, withdraw/reactivate students and append new rows. Omitted records remain intact.
 - Pasted changes use the existing signed preview/confirmation, ownership, CSRF and stale-revision checks. Invalid cells can be corrected without losing the pasted grid.
