@@ -30,3 +30,24 @@ class ReviewPolicyTests(unittest.TestCase):
                 if change=='multiple':r['selected']=['A','B']
                 self.assertTrue(apply_review_policy(r,{})['review_reasons'])
         self.assertTrue(apply_review_policy(self.reading(),{'review_policy':'conservative'})['review_reasons'])
+
+    def test_modest_acceptance_limits_and_minor_spill(self):
+        r=self.reading();r['alignment_score']=.65;r['mark_clues']['B']['stroke_area']=10
+        self.assertEqual(apply_review_policy(r,{})['review_reasons'],[])
+        for field,value in [('alignment',.649),('area',9),('span',6),('density',.079)]:
+            r=self.reading()
+            if field=='alignment':r['alignment_score']=value
+            elif field=='density':r['densities']['B']=value
+            else:r['mark_clues']['B']['stroke_'+field]=value
+            self.assertTrue(apply_review_policy(r,{})['review_reasons'])
+        r=self.reading();r['review_reasons']=['stray_ink_or_cancellation']
+        r['mark_clues']['B']['outside_ink_pixels']=16;r['mark_clues']['A']['outside_ink_pixels']=4
+        accepted=apply_review_policy(copy.deepcopy(r),{})
+        self.assertEqual(accepted['review_reasons'],[])
+        self.assertEqual(accepted['original_review_reasons'],['stray_ink_or_cancellation'])
+        self.assertEqual(accepted['auto_accept_reason'],'isolated_mark_minor_spill')
+        for option,field,value in [('B','outside_ink_pixels',17),('A','outside_ink_pixels',5),('A','diagonal_clue',True),('B','cross_suspected',True)]:
+            unsafe=copy.deepcopy(r);unsafe['mark_clues'][option][field]=value
+            self.assertTrue(apply_review_policy(unsafe,{})['review_reasons'])
+        del r['mark_clues']['A']['outside_ink_pixels']
+        self.assertTrue(apply_review_policy(r,{})['review_reasons'])

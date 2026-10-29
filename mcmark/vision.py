@@ -202,7 +202,7 @@ def align(gray, config):
 
 def apply_review_policy(reading, config):
     """Accept isolated, well-registered strokes; preserve all ambiguous evidence."""
-    reading['review_policy'] = 'balanced-v1'
+    reading['review_policy'] = 'balanced-v2'
     reading['original_review_reasons'] = list(reading['review_reasons'])
     if config.get('review_policy') == 'conservative':
         reading['review_policy'] = 'conservative'
@@ -210,19 +210,23 @@ def apply_review_policy(reading, config):
     selected = reading['selected']
     reasons = set(reading['review_reasons'])
     # Never suppress competing ink, cancellation clues or failed registration.
-    if len(selected) != 1 or reasons - {'uncertain_density', 'faint_or_partial_mark', 'thin_stroke_candidate'}:
+    if len(selected) != 1 or reasons - {'uncertain_density', 'faint_or_partial_mark', 'thin_stroke_candidate','stray_ink_or_cancellation'}:
         return reading
     label = selected[0]
     clues = reading.get('mark_clues', {})
     mark = clues.get(label, {})
-    if (reading.get('alignment_score', 0) >= .70
+    minor_spill=('stray_ink_or_cancellation' in reasons)
+    if minor_spill and (mark.get('outside_ink_pixels',float('inf'))>16
+        or any(c.get('outside_ink_pixels',float('inf'))>4 for option,c in clues.items() if option!=label)):
+        return reading
+    if (reading.get('alignment_score', 0) >= .65
         and reading['densities'][label] >= .08
-        and mark.get('stroke_area', 0) >= 12
+        and mark.get('stroke_area', 0) >= 10
         and mark.get('stroke_span', 0) >= 7
-        and not mark.get('cross_suspected') and not mark.get('diagonal_clue')
+        and not any(c.get('cross_suspected') or c.get('diagonal_clue') for c in clues.values())
         and all(c.get('new_ink_pixels', 0) <= 2 for option,c in clues.items() if option != label)):
         reading['review_reasons'] = []
-        reading['auto_accept_reason'] = 'isolated_registered_stroke'
+        reading['auto_accept_reason'] = 'isolated_mark_minor_spill' if minor_spill else 'isolated_registered_stroke'
     return reading
 
 

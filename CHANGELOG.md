@@ -2,6 +2,7 @@
 
 ## 2026-10-29 — Faster visual review and bounded alignment recovery
 
+- Slightly relaxed automatic review clearance (balanced-v2): row correlation 0.70 → 0.65, connected stroke area 12 → 10 pixels; tolerate up to 16 selected-box spill pixels only with at most 4 around other choices. Density/span thresholds and cancellation, competing-ink and failed-alignment guards remain. The 240-answer development replay has 63 → 57 pending answers, unchanged selections and zero observed unflagged errors.
 - Added compact, image-based confirmation of flagged single choices, including cancellation warnings after explicit teacher inspection. Failed alignment and multiple/blank readings remain separate.
 - Added sheet-level alignment summaries, low-score/boundary retries up to 14 pixels, stricter retry evidence and equal-location rounding tolerance. Recovery diagnostics are preserved; review crops follow accepted offsets.
 - Added Select eligible single choices and Confirm selected current choices controls across all questions, retaining question-level controls.

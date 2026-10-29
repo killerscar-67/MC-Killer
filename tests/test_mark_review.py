@@ -90,7 +90,7 @@ class MarkReviewTests(unittest.TestCase):
             refresh_review(row)
             self.assertTrue(row['review_required'])
 
-    def test_thin_strokes_are_provisional_candidates(self):
+    def test_isolated_thin_strokes_keep_evidence_and_faint_strokes_stay_pending(self):
         from mcmark.vision import detect
         for color in (30,170):
             sheet=self.blank.copy()
@@ -99,7 +99,11 @@ class MarkReviewTests(unittest.TestCase):
             result=detect(sheet,self.q,self.config)
             self.assertEqual(result['selected'],['A'])
             self.assertEqual(result['suggested_selected'],['A'])
-            self.assertIn('thin_stroke_candidate',result['review_reasons'])
+            self.assertIn('thin_stroke_candidate',result['original_review_reasons'])
+            if color==30:
+                self.assertEqual(result['review_reasons'],[])
+                self.assertEqual(result['auto_accept_reason'],'isolated_registered_stroke')
+            else:self.assertIn('thin_stroke_candidate',result['review_reasons'])
             self.assertNotIn('blank',result['review_reasons'])
             self.assertEqual(result['raw_selected'],[])
 
@@ -203,7 +207,8 @@ class MarkReviewTests(unittest.TestCase):
         result=detect(shifted,self.q,self.config)
         self.assertEqual(result['selected'],['A'])
         self.assertEqual(result['local_offset'],[2,-3])
-        self.assertIn('thin_stroke_candidate',result['review_reasons'])
+        self.assertIn('thin_stroke_candidate',result['original_review_reasons'])
+        self.assertEqual(result['auto_accept_reason'],'isolated_registered_stroke')
 
     def test_failed_local_registration_suppresses_weak_candidates(self):
         from mcmark.vision import detect
