@@ -1,10 +1,10 @@
-# Editable reusable rosters (draft PR #5)
+# Editable reusable rosters
 
 This workflow uses ordinary school answer sheets. **No QR codes, personalised printing or additional school-provided identification are required.** Identity comes from the teacher-confirmed class-list/scan order. Equal counts cannot detect swapped papers; teachers must arrange the stack and use image evidence to correct an incorrect assignment.
 
 ## Teacher workflow
 
-1. Open **My rosters**, create a name and school year, then import CSV/XLSX or add students manually. Rosters are private to the owning teacher; school-wide sharing is not implemented.
+1. Open **My rosters**, create a name and school year, then paste from Excel/Google Sheets into the editable grid, import CSV/XLSX, or add students manually. Rosters are private to the owning teacher; school-wide sharing is not implemented.
 2. Import up to 200 students, with class, number, english_name and optional chinese_name. Names can be English, Chinese or both. Class numbers retain leading zeros. Common spaced headers such as Class No. and English Name are accepted. UTF-8 CSV and XLSX are supported; CSV uploads are 1 MB maximum and expanded XLSX data is limited to 20 MB.
 3. Preview imports before applying. No changes are saved at preview. Active class/number pairs must be unique; 01 and 1 are equivalent. Omitted rows are kept. For bulk updates, export the roster and retain its record_id column. Set active=false for withdrawal. Add new students with **Add student** when updating an existing roster.
 4. Use **Edit students** to change names/class/numbers or reactivate a withdrawn student. Every edit preserves the permanent student reference. No hard-delete workflow is supplied; withdrawals remain visible in history. A fresh roster imported from an exported CSV retains valid permanent references, allowing a new school-year list without inferring identity from names/numbers.
@@ -41,3 +41,11 @@ The CI PostgreSQL service applies all migrations to a disposable database and ve
 Before school-wide rollout, pilot a real exam stack with a teacher checking written identities against assignments. Independent scanner/mark detection validation remains a separate concern. This change does not claim recognition accuracy or detect equal-count scan-order mistakes.
 
 Rollback: stop new roster use and redeploy the previous application. Leave the additive roster tables intact so snapshots/audit can be recovered. Do not delete student history to roll back application code.
+
+## Paste from a spreadsheet
+
+Copy a rectangular selection in this order: **Class, Class number, English name, Chinese name**. Click the first destination cell in the grid and paste. A header row (`Class`, `Class No.`, `English Name`, `Chinese Name`) is optional when pasting from the Class column. Leave unavailable Chinese names empty; a student must have at least one name. The optional fifth column accepts Active/Inactive or true/false.
+
+The grid supports ordinary Tab navigation, direct cell editing, adding rows and removing unsaved rows. Saved rows appear automatically and keep their stable references. Paste into those rows only when you intend to update those same students; append new students using Add row. A repeated active class/number is rejected rather than silently merged. Use Inactive for withdrawals. Preview changes, check the before/after values and select Apply changes to save. Reset unsaved changes restores the initially displayed grid after confirmation. Invalid input stays editable.
+
+The grid uses plain-text clipboard data and local application code; it does not embed a third-party spreadsheet or send rosters to an external service. Existing file import/export remains available, including a no-JavaScript file-upload fallback. No additional database migration is needed.

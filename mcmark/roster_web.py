@@ -7,7 +7,7 @@ import uuid
 from flask import Blueprint,abort,flash,redirect,render_template,request,send_file,session,url_for
 from itsdangerous import URLSafeTimedSerializer,BadSignature,SignatureExpired
 from .database import connect,begin_write,locked
-from .student_lists import student,validate_students,parse_import,export_list
+from .student_lists import student,validate_students,parse_import,parse_grid,export_list
 
 
 def register_rosters(app,data,login_required,owned,audit):
@@ -44,7 +44,7 @@ def register_rosters(app,data,login_required,owned,audit):
     @bp.route('/rosters/<rid>',methods=['GET','POST'])
     @login_required
     def edit(rid):
-        preview=None;changes=None;pending=None
+        preview=None;changes=None;pending=None;grid_error=None;grid_rows=None
         with connect(data) as db:
             if request.method=='POST':begin_write(db)
             roster=get_list(db,rid,request.method=='POST');students=json.loads(roster['students'])
@@ -52,10 +52,15 @@ def register_rosters(app,data,login_required,owned,audit):
                 if request.form.get('version')!=str(roster['version']):abort(409,'Roster changed in another tab. Reload before editing.')
                 action=request.form.get('action')
                 try:
-                    if action=='import':
-                        file=request.files.get('file')
-                        if not file:raise ValueError('Choose a CSV or XLSX roster.')
-                        preview,changes=parse_import(file.stream.read(1024*1024+1),file.filename,students)
+                    if action in ('import','paste'):
+                        if action=='paste':
+                            if len(request.form.get('grid','').encode('utf-8'))>1024*1024:raise ValueError('Limit the grid to 200 students and 1 MB.')
+                            grid_rows=json.loads(request.form.get('grid','[]'))
+                            preview,changes=parse_grid(request.form.get('grid','[]'),students)
+                        else:
+                            file=request.files.get('file')
+                            if not file:raise ValueError('Choose a CSV or XLSX roster.')
+                            preview,changes=parse_import(file.stream.read(1024*1024+1),file.filename,students)
                         pending=signer.dumps({'roster':rid,'actor':session['user'],'version':roster['version'],'students':preview,'changes':changes})
                     elif action=='confirm_import':
                         try:proposal=signer.loads(request.form.get('proposal',''),max_age=900)
@@ -74,14 +79,19 @@ def register_rosters(app,data,login_required,owned,audit):
                         if not title or len(title)>160 or not year or len(year)>40:raise ValueError('Enter a roster name and school year.')
                         db.execute('UPDATE rosters SET title=?,school_year=? WHERE id=?',(title,year,rid));changes=[{'title':title,'school_year':year}]
                     else:raise ValueError('Unknown roster action.')
-                    if action!='import':
+                    if action not in ('import','paste'):
                         db.execute('UPDATE rosters SET students=?,version=version+1,updated=? WHERE id=?',(json.dumps(students,ensure_ascii=False),time.time(),rid))
                         roster_audit(db,rid,action,changes)
                         flash('Roster saved. Existing assessment candidates have not changed.')
                         return redirect(url_for('lists.edit',rid=rid))
-                except ValueError as exc:abort(400,str(exc))
+                except ValueError as exc:
+                    if action!='paste':abort(400,str(exc))
+                    grid_error=str(exc)
+                    # Keep valid-shaped input so teachers can correct it in place.
+                    if not isinstance(grid_rows,list) or len(grid_rows)>200 or any(not isinstance(r,dict) or any(not isinstance(v,str) for v in r.values()) for r in grid_rows):grid_rows=None
             history=db.execute('SELECT action,at FROM roster_audit WHERE roster=? ORDER BY id DESC LIMIT 30',(rid,)).fetchall()
-        return render_template('roster_edit.html',roster=roster,students=students,history=history,changes=changes,proposal=pending)
+        if grid_rows is None:grid_rows=[{k:(r['student_id'] if k=='number' else ('true' if r['active'] else 'false') if k=='active' else r.get(k,'')) for k in ('record_id','class','number','english_name','chinese_name','active')} for r in students]
+        return render_template('roster_edit.html',roster=roster,students=students,history=history,changes=changes,proposal=pending,grid_rows=grid_rows,grid_error=grid_error),400 if grid_error else 200
 
     @bp.get('/rosters/<rid>/export')
     @login_required

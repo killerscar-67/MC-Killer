@@ -15,6 +15,25 @@ def header(value):
 COLUMNS=['record_id','class','number','english_name','chinese_name','active']
 
 
+def parse_grid(content, existing):
+    """Validate browser grid rows without guessing existing students' identities."""
+    if len(content.encode('utf-8'))>1024*1024:raise ValueError('Limit the grid to 200 students and 1 MB.')
+    try:raw=json.loads(content)
+    except (ValueError,TypeError):raise ValueError('Cannot read the grid. Reload and try again.')
+    if not isinstance(raw,list) or len(raw)>LIMIT:raise ValueError('Limit a roster to 200 students, including inactive records.')
+    by_id={r['record_id']:r for r in existing};merged=dict(by_id);seen=set();changes=[]
+    for values in raw:
+        if not isinstance(values,dict) or set(values)-set(COLUMNS) or any(not isinstance(v,str) for v in values.values()):raise ValueError('Invalid roster grid row.')
+        rid=values.get('record_id','').strip()
+        if rid and (rid not in by_id or rid in seen):raise ValueError('Invalid or duplicate permanent student reference. Reload the roster.')
+        if rid:seen.add(rid)
+        if not rid and not any(values.get(k,'').strip() for k in ('class','number','english_name','chinese_name')):continue
+        row=student(values,rid or None);merged[row['record_id']]=row
+        if row!=by_id.get(row['record_id']):changes.append({'before':by_id.get(row['record_id']),'after':row})
+    if not changes:raise ValueError('No changes found. Edit a cell or paste new students before previewing.')
+    return validate_students(list(merged.values())),changes
+
+
 def student(values, record_id=None):
     klass=re.sub(r'\s+','',str(values.get('class',''))).upper()
     number=str(values.get('student_id',values.get('number',''))).strip()
