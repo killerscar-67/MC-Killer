@@ -238,17 +238,24 @@ def detect(gray, grid, config):
         window=gray[top-pad:bottom+pad,left-pad:right+pad]
         match=cv2.matchTemplate(window,target,cv2.TM_CCOEFF_NORMED)
         _,score,_,position=cv2.minMaxLoc(match);dx,dy=position[0]-pad,position[1]-pad
-        # A boundary match can indicate residual drift rather than blank ink.
-        # Retry within a bounded radius, retaining score and boundary guards.
-        if abs(dx)==pad or abs(dy)==pad:
-            retry_pad=9
+        initial={'offset':[dx,dy],'score':float(score),'radius':pad}
+        # Retry low-score interior matches too: the true row may lie outside
+        # the first window. Fourteen pixels stays below half the Delia option
+        # and row spacing, avoiding a jump to the next option/question.
+        # The larger search requires stronger evidence than ordinary sampling.
+        for retry_pad in (9,14):
+            if score>=.60 and abs(dx)<pad and abs(dy)<pad:break
             if top>=retry_pad and left>=retry_pad and right+retry_pad<=gray.shape[1] and bottom+retry_pad<=gray.shape[0]:
                 retry_window=gray[top-retry_pad:bottom+retry_pad,left-retry_pad:right+retry_pad]
                 retry=cv2.matchTemplate(retry_window,target,cv2.TM_CCOEFF_NORMED)
                 _,retry_score,_,retry_position=cv2.minMaxLoc(retry)
-                if retry_score>=score:
+                retry_dx,retry_dy=retry_position[0]-retry_pad,retry_position[1]-retry_pad
+                # Equal locations may differ by floating-point roundoff in
+                # differently sized OpenCV windows; don't reject that retry.
+                tolerance=.001 if (retry_dx,retry_dy)==(dx,dy) else 0
+                if retry_score>=max(.60,score-tolerance):
                     window=retry_window;pad=retry_pad;score=retry_score;position=retry_position
-                    dx,dy=position[0]-pad,position[1]-pad
+                    dx,dy=retry_dx,retry_dy
         patch=window[position[1]:position[1]+target.shape[0],position[0]:position[0]+target.shape[1]]
         local_grid={**grid,'centers':[[x-left,y-top] for x,y in grid['centers']]}
         if score<.45 or abs(dx)==pad or abs(dy)==pad:
@@ -257,6 +264,9 @@ def detect(gray, grid, config):
         else:
             reading=detect(patch,local_grid,{**config,'_local_aligned':True,'_template_array':target})
         reading['local_offset']=[dx,dy];reading['alignment_score']=float(score);reading['local_search_radius']=pad
+        reading['alignment_version']='row-bounded-v2'
+        if pad>5 and 'uncertain_local_alignment' not in reading['review_reasons']:
+            reading['alignment_recovery']={'initial':initial,'offset':[dx,dy],'radius':pad,'score':float(score)}
         return apply_review_policy(reading,config)
     radius = grid.get('radius', config.get('radius', 10)) * .65
     densities = {}

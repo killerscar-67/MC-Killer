@@ -1,7 +1,9 @@
 # Changelog
 
-## 2026-10-29 — Assessment-wide answer review
+## 2026-10-29 — Faster visual review and bounded alignment recovery
 
+- Added compact, image-based confirmation of flagged single choices, including cancellation warnings after explicit teacher inspection. Failed alignment and multiple/blank readings remain separate.
+- Added sheet-level alignment summaries, low-score/boundary retries up to 14 pixels, stricter retry evidence and equal-location rounding tolerance. Recovery diagnostics are preserved; review crops follow accepted offsets.
 - Added Select eligible single choices and Confirm selected current choices controls across all questions, retaining question-level controls.
 - Bulk selection loads eligible evidence images, including offscreen/lazy images, before selecting rows. Missing/broken images stay excluded.
 - Existing manual decisions are kept. Cancellation, multiple, blank and alignment eligibility rules remain unchanged. Decisions still require Save selected decisions & recalculate; no automatic finalisation.

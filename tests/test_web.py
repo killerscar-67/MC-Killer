@@ -169,6 +169,24 @@ class TeacherWebTests(unittest.TestCase):
         self.assertNotIn(b'data-field="decision-s1q2"',page.data)
         self.assertIn(b'value="" checked',page.data)
 
+    def test_compact_visual_rows_include_warned_singles_and_group_alignment_failures(self):
+        jid,version=self.grouped_fixture()
+        with connect(self.data) as db:
+            rows=json.loads(db.execute('SELECT results FROM jobs WHERE id=?',(jid,)).fetchone()[0])
+            rows[0]['responses'][1].update(selected=['B'],review_reasons=['possible_cross_out'],review_crop='review/test.png',mark_clues={'B':{'cross_suspected':True}},densities={'B':1.0})
+            rows[1]['responses'][1].update(selected=['A'],review_reasons=['uncertain_local_alignment'],review_crop='review/test.png')
+            db.execute('UPDATE jobs SET results=? WHERE id=?',(json.dumps(rows),jid))
+        page=self.client.get(f'/assessments/{jid}/review')
+        self.assertIn(b'data-visual-choice data-field="decision-s0q2"',page.data)
+        self.assertNotIn(b'data-visual-choice data-field="decision-s1q2"',page.data)
+        self.assertEqual(page.data.count(b'data-batch-choice'),0)
+        self.assertIn(b'Sheet alignment needs attention',page.data)
+        form={'csrf':self.csrf,'version':version,'s0q2':'B'}
+        self.assertEqual(self.client.post(f'/assessments/{jid}/review',data=form).status_code,302)
+        with connect(self.data) as db:result=json.loads(db.execute('SELECT results FROM jobs WHERE id=?',(jid,)).fetchone()[0])
+        self.assertEqual(result[0]['responses'][1]['teacher_review']['decision'],['B'])
+        self.assertFalse(result[1]['responses'][1].get('teacher_review'))
+
     def test_group_review_ownership_csrf_and_finalization(self):
         jid,version=self.grouped_fixture()
         other=self.app.test_client()

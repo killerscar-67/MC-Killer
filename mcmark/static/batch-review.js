@@ -23,8 +23,10 @@ function loadBatchImage(box) {
 }
 
 function prepareBatchChoices(scope, doc) {
-  let count = 0;
-  scope.querySelectorAll('[data-batch-choice]:checked').forEach(box => {
+  let count = 0; const seen = new Set();
+  scope.querySelectorAll('[data-batch-choice]:checked, [data-visual-choice]:checked').forEach(box => {
+    if (seen.has(box.dataset.field)) return;
+    seen.add(box.dataset.field);
     const field = doc.getElementById(box.dataset.field);
     if (!field || field.disabled || !batchImageAvailable(box)) return;
     const pending = field.querySelector('input:checked');
@@ -37,14 +39,22 @@ function prepareBatchChoices(scope, doc) {
 }
 
 if (typeof document !== 'undefined') {
-  document.querySelectorAll('[data-batch-select]').forEach(button => button.addEventListener('click', async () => {
+  document.querySelectorAll('[data-visual-filter]').forEach(filter => filter.addEventListener('change', () => {
+    filter.closest('details').querySelectorAll('[data-visual-card]').forEach(card => {
+      card.hidden = filter.value === 'warnings' && card.dataset.automatic === 'true';
+      if (card.hidden) card.querySelector('[data-visual-choice]').checked = false;
+    });
+  }));
+  document.querySelectorAll('[data-batch-select], [data-visual-select]').forEach(button => button.addEventListener('click', async () => {
     const scope = batchReviewScope(button);
     const status = button.closest('.batch-review-tools').querySelector('[data-batch-status]');
-    const boxes = Array.from(scope.querySelectorAll('[data-batch-choice]'));
+    const visual = button.hasAttribute('data-visual-select');
+    const boxes = Array.from(scope.querySelectorAll(visual ? '[data-visual-choice]' : '[data-batch-choice]'))
+      .filter(box => !visual || !box.closest('[data-visual-card]').hidden);
     // Freeze both group and assessment batch controls while evidence loads.
-    const controls = Array.from(button.closest('form').querySelectorAll('[data-batch-select], [data-batch-prepare]'));
+    const controls = Array.from(button.closest('form').querySelectorAll('[data-batch-select], [data-visual-select], [data-batch-prepare], [data-visual-filter]'));
     controls.forEach(control => { control.disabled = true; });
-    status.textContent = `Loading evidence for ${boxes.length} eligible rows…`;
+    status.textContent = `Loading evidence for ${boxes.length} ${visual ? 'displayed' : 'eligible'} rows…`;
     try {
       const available = await Promise.all(boxes.map(loadBatchImage));
       boxes.forEach((box, index) => { box.checked = available[index]; });

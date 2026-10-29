@@ -28,3 +28,10 @@ test('eligible lazy images load before selection; missing images are skipped', a
   assert.equal(await loadBatchImage({closest: () => ({querySelector: () => image})}),true);
   assert.equal(await loadBatchImage({closest: () => ({querySelector: () => null})}),false);
 });
+
+test('compact and detailed selections refer to one logical decision', () => {
+  const choice = {value:'B',checked:false};
+  const entry = {dataset:{field:'decision-s0q1',value:'B'},closest:() => ({querySelector:() => ({complete:true,naturalWidth:100})})};
+  const field = {querySelector:() => ({value:''}),querySelectorAll:() => [choice]};
+  assert.equal(prepareBatchChoices({querySelectorAll:() => [entry,entry]}, {getElementById:() => field}),1);
+});
