@@ -17,7 +17,7 @@ See [today's changelog](CHANGELOG.md) and [continuation notes](docs/HANDOFF.md) 
 
 ## Teacher workflow
 
-Use [editable reusable rosters](docs/REUSABLE_ROSTERS.md) to import a class once,
+Use [editable reusable rosters](docs/REUSABLE_ROSTERS.md) to paste a class directly from Excel/Google Sheets or import it once,
 add or withdraw students during the year, and select the saved list for each
 assessment. Each exam keeps its own snapshot. Preview absences, arrange ordinary
 answer sheets in the displayed class/number order, then upload scans. All five

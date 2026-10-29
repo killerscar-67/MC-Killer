@@ -6,11 +6,26 @@ import re
 import tempfile
 import unittest
 from unittest.mock import patch
-from mcmark.student_lists import student,parse_import,validate_students,export_list
+from mcmark.student_lists import student,parse_import,parse_grid,validate_students,export_list
 from mcmark.web import create_app,connect,process_job
 
 
 class StudentListTests(unittest.TestCase):
+    def test_grid_updates_keep_references_and_omitted_rows(self):
+        old=[student({'class':'5A','number':'01','name':'Example'}),student({'class':'5A','number':'2','name':'Kept'})]
+        payload=[{'record_id':old[0]['record_id'],'class':'5B','number':'03','english_name':'Updated','chinese_name':'測試','active':'false'},
+                 {'class':'5A','number':'04','english_name':'New','chinese_name':'新生'}, {'class':'','number':'','active':'true'}]
+        rows,changes=parse_grid(json.dumps(payload),old)
+        self.assertEqual(len(rows),3);self.assertEqual(len(changes),2)
+        updated=next(r for r in rows if r['record_id']==old[0]['record_id'])
+        self.assertEqual(updated['student_id'],'03');self.assertFalse(updated['active']);self.assertIn(old[1],rows)
+        for bad in (None,{},[1],[{'class':5}],[{'record_id':'foreign'}],[payload[0],payload[0]],
+                    [{'class':'5A','number':'2','name':'not an allowed key'}],
+                    [{'class':'5A','number':'02','english_name':'Duplicate'}], [{}]*201):
+            with self.assertRaises(ValueError):parse_grid(json.dumps(bad),old)
+        with self.assertRaises(ValueError):parse_grid('not json',old)
+        with self.assertRaises(ValueError):parse_grid('[]',old)
+
     def test_stable_import_and_explicit_withdrawal(self):
         rows,_=parse_import('class,number,english_name,chinese_name\n5A,01,Example,測試\n'.encode(),'students.csv',[])
         rid=rows[0]['record_id'];self.assertEqual(rows[0]['student_id'],'01')
@@ -88,6 +103,25 @@ class SavedRosterWebTests(unittest.TestCase):
         self.assertEqual(self.client.post('/rosters/'+self.rid,data={'csrf':'token','version':'1','action':'confirm_import','proposal':proposal}).status_code,302)
         self.assertEqual(len(json.loads(self.roster()['students'])),1)
         self.assertEqual(self.client.post('/rosters/'+self.rid,data={'csrf':'token','version':'1','action':'confirm_import','proposal':proposal}).status_code,409)
+
+    def test_paste_preview_confirmation_error_recovery_and_security(self):
+        url='/rosters/'+self.rid
+        payload=[{'class':'5A','number':'01','english_name':'Example','chinese_name':'測試'}]
+        data={'csrf':'token','version':'1','action':'paste','grid':json.dumps(payload)}
+        response=self.client.post(url,data=data)
+        self.assertEqual(response.status_code,200);self.assertEqual(json.loads(self.roster()['students']),[])
+        proposal=html.unescape(re.search(r'name="proposal" value="([^"]+)"',response.data.decode()).group(1))
+        self.assertEqual(self.client.post(url,data={**data,'action':'confirm_import','proposal':proposal}).status_code,302)
+        saved=json.loads(self.roster()['students'])[0];self.assertEqual(saved['student_id'],'01')
+        self.assertEqual(self.client.post(url,data=data).status_code,409)
+        invalid={'class':'bad','number':'2','english_name':'<script>not executable</script>'}
+        response=self.client.post(url,data={**data,'version':'2','grid':json.dumps([invalid])})
+        self.assertEqual(response.status_code,400);self.assertIn(b'Use a class',response.data)
+        self.assertNotIn(b'<script>not executable',response.data);self.assertIn(b'roster-grid-initial',response.data)
+        self.assertEqual(len(json.loads(self.roster()['students'])),1)
+        self.assertEqual(self.client.post(url,data={**data,'csrf':''}).status_code,400)
+        with self.client.session_transaction() as s:s['user']='other-owner'
+        self.assertEqual(self.client.post(url,data={**data,'version':'2'}).status_code,404)
 
     def test_explicit_candidate_update_preserves_submitted_identity_and_finalization_gate(self):
         self.add();jid=self.assessment();ready=self.ready(jid);record=json.loads(self.roster()['students'])[0]
