@@ -1,0 +1,6 @@
+{% extends 'base.html' %}{% block body %}
+<a href="{{url_for('index')}}">← Assessments</a><h1>My rosters</h1>
+<p>Save a class list once and reuse it. Edits apply to future selections; existing assessment snapshots stay unchanged. Rosters are private to your teacher account.</p>
+<section class="card"><h2>Create a roster</h2><form method="post"><input type="hidden" name="csrf" value="{{session.csrf}}"><div class="two-col"><label>Roster name<input name="title" maxlength="160" placeholder="e.g. Form 5 Mathematics" required></label><label>School year<input name="school_year" maxlength="40" placeholder="2026–2027" required></label></div><button class="primary">Create roster</button></form></section>
+<section class="card spaced"><h2>Saved rosters</h2>{% for r in rosters %}<p><a href="{{url_for('lists.edit',rid=r.id)}}">{{r.title}} · {{r.school_year}}</a> · revision {{r.version}}</p>{% else %}<p>No saved rosters yet.</p>{% endfor %}</section>
+{% endblock %}

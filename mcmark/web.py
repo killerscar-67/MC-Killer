@@ -22,6 +22,7 @@ from .core import export, grade, validate
 from .review import refresh_review, batch_review_eligible
 from .database import connect,initialize,begin_write,locked,next_queued,INTEGRITY_ERRORS
 from .storage import configured_storage, job_prefix, relative_evidence, validate_evidence, StorageError
+from .roster import parse_roster, roster_digest, with_absences, assign_roster, submission_csv
 
 ROOT = Path(__file__).resolve().parents[1]
 FIELDS = ['name','signature','class','student_id','subject_paper']
@@ -140,11 +141,41 @@ def create_app(data=None, testing=False, start_worker=True):
             jobs=db.execute('SELECT * FROM jobs WHERE owner=? ORDER BY created DESC',(session['user'],)).fetchall()
         return render_template('index.html',jobs=jobs)
 
+    def uploaded_roster():
+        upload=request.files.get('roster')
+        if not upload or not upload.filename: raise ValueError('Upload a class-list CSV and preview it first.')
+        return parse_roster(upload.stream.read(1024*1024+1))
+
+    def roster_selection():
+        rid=request.form.get('roster_id','')
+        if not rid:return uploaded_roster(),None
+        with connect(data) as db:
+            record=db.execute('SELECT * FROM rosters WHERE id=? AND owner=?',(rid,session['user'])).fetchone()
+        if not record:abort(404)
+        record=dict(record)
+        rows=[{**r,'absent':False} for r in json.loads(record['students']) if r['active']]
+        if not rows:raise ValueError('This saved roster has no active students.')
+        return rows,record
+
+    def new_form(status=200):
+        with connect(data) as db:
+            rosters=[dict(r) for r in db.execute('SELECT id,title,school_year FROM rosters WHERE owner=? ORDER BY school_year DESC,title',(session['user'],)).fetchall()]
+        return render_template('new_roster.html',rosters=rosters),status
+
+    @app.post('/roster/preview')
+    @login_required
+    def preview_roster():
+        try:
+            rows,source=roster_selection()
+            return {'students':rows,'digest':roster_digest(rows),'version':source['version'] if source else None}
+        except ValueError as exc:
+            return {'error':str(exc)},400
+
     @app.route('/assessments/new',methods=['GET','POST'])
     @login_required
     def new():
         if request.method=='GET':
-            return render_template('new.html')
+            return new_form()
         directory=None
         try:
             count=int(request.form.get('count','0'))
@@ -159,6 +190,21 @@ def create_app(data=None, testing=False, start_worker=True):
             config['questions']=[{**q,'answer':key[i]} for i,q in enumerate(config['questions'][:count])]
             config['scoring']={'correct':1,'wrong':float(request.form.get('wrong','0')),'blank':0,'multiple':0}
             config['pass_percent']=float(request.form.get('pass','50'))
+            mode=request.form.get('identity_mode','legacy')
+            if mode not in ('legacy','roster'): raise ValueError('Invalid identity mode.')
+            if mode=='roster':
+                roster,roster_source=roster_selection()
+                if roster_source and request.form.get('roster_version')!=str(roster_source['version']):
+                    raise ValueError('The saved roster changed. Preview it again before uploading scans.')
+                if request.form.get('roster_digest')!=roster_digest(roster):
+                    raise ValueError('Preview this class list and mark absentees before starting.')
+                if request.form.get('roster_order_confirmed')!='yes':
+                    raise ValueError('Confirm that the exam papers follow the displayed roster order.')
+                config.update(identity_mode='roster',roster=with_absences(roster,request.form.getlist('absent')),
+                              assessment_subject=request.form.get('subject','').strip()[:160],roster_snapshot_version=1)
+                for r in config['roster']:
+                    r.setdefault('record_id',uuid.uuid4().hex)
+                if roster_source:config.update(roster_id=roster_source['id'],roster_version=roster_source['version'],roster_title=roster_source['title'],school_year=roster_source['school_year'])
             validate(config)
             uploads=[f for f in request.files.getlist('scans') if f.filename]
             if not uploads or len(uploads)>100:
@@ -180,6 +226,10 @@ def create_app(data=None, testing=False, start_worker=True):
                 if total_pages>200:
                     raise ValueError('Limit each batch to 200 pages.')
                 manifest.append({'stored':destination.name,'original':f.filename,'sha256':hashlib.sha256(destination.read_bytes()).hexdigest()})
+            if mode=='roster':
+                expected=sum(not r['absent'] for r in config['roster'])
+                if total_pages!=expected:
+                    raise ValueError(f'Uploaded sheets ({total_pages}) must match students sitting the exam ({expected}).')
             (source/'manifest.json').write_text(json.dumps(manifest))
             if storage:
                 # Do not enqueue until originals and their integrity manifest are durable.
@@ -191,7 +241,11 @@ def create_app(data=None, testing=False, start_worker=True):
             with connect(data) as db:
                 db.execute('INSERT INTO jobs(id,owner,title,subject,level,state,created,updated,config) VALUES(?,?,?,?,?,?,?,?,?)',
                     (jid,session['user'],title,request.form.get('subject','').strip()[:160],request.form.get('level','').strip()[:80],'queued',now,now,json.dumps(config)))
-                audit(db,jid,'created',{'files':len(uploads),'pages':total_pages})
+                audit(db,jid,'created',{'files':len(uploads),'pages':total_pages,'identity_mode':mode})
+                if mode=='roster':
+                    audit(db,jid,'roster_confirmed',{'digest':roster_digest(roster),
+                          'students':len(roster),'absent':[r['record_id'] for r in config['roster'] if r['absent']],
+                          'order':'numeric_class_number','submitted':total_pages})
             return redirect(url_for('assessment',jid=jid))
         except StorageError:
             if directory:
@@ -201,7 +255,7 @@ def create_app(data=None, testing=False, start_worker=True):
             if directory:
                 shutil.rmtree(directory,ignore_errors=True)
             flash(str(exc),'error')
-            return render_template('new.html'),400
+            return new_form(400)
 
     @app.get('/assessments/<jid>')
     @login_required
@@ -211,7 +265,7 @@ def create_app(data=None, testing=False, start_worker=True):
         with connect(data) as db:
             history=db.execute('SELECT action,at FROM audit WHERE job=? ORDER BY id DESC LIMIT 20',(jid,)).fetchall()
         return render_template('assessment.html',job=job,results=results,history=history,
-            pending=sum(r.get('review_required',False) for r in results))
+            pending=sum(r.get('review_required',False) for r in results),roster=json.loads(job['config']).get('roster',[]),submitted_ids={r.get('student_record_id') for r in results})
 
     @app.get('/assessments/<jid>/review')
     @login_required
@@ -292,6 +346,7 @@ def create_app(data=None, testing=False, start_worker=True):
                 return None
             return url_for('image',jid=jid,path=relative.as_posix())
         return render_template('sheet.html',job=job,row=row,index=index,fields=FIELDS,asset=asset,
+            roster_mode=json.loads(job['config']).get('identity_mode')=='roster',
             full_image=url_for('image',jid=jid,path=f'review/{index+1:05d}.png'))
 
     @app.get('/assessments/<jid>/images/<path:path>')
@@ -341,6 +396,8 @@ def create_app(data=None, testing=False, start_worker=True):
                 answer['teacher_review']={'previous_selected':answer['selected'],'decision':labels,'note':request.form.get('note','')[:2000], 'actor':session['email'],'at':time.time()}
                 answer['selected']=labels
             if request.form.get('confirm_metadata')=='yes':
+                if json.loads(job['config']).get('identity_mode')=='roster':
+                    abort(400,'Student identity comes from the confirmed class list.')
                 row.setdefault('original_metadata',{f:row.get(f,'') for f in FIELDS})
                 for field in FIELDS:
                     row[field]=request.form.get(field,'').strip()[:500]
@@ -371,6 +428,11 @@ def create_app(data=None, testing=False, start_worker=True):
             begin_write(db)
             job=dict(locked(db,'SELECT * FROM jobs WHERE id=?',(jid,)).fetchone())
             rows=json.loads(job['results'])
+            config=json.loads(job['config'])
+            if config.get('roster_snapshot_version'):
+                expected={r['record_id'] for r in config['roster'] if not r['absent']}
+                assigned=[r.get('student_record_id') for r in rows]
+                if set(assigned)!=expected or len(set(assigned))!=len(assigned):abort(409,'Resolve candidate assignments or mark non-submissions absent before finalising.')
             if job['state']!='ready' or not rows or any(r.get('review_required') for r in rows):
                 abort(409,'Resolve every answer and identity review before finalizing.')
             db.execute('UPDATE jobs SET finalized=1,updated=? WHERE id=?',(time.time(),jid))
@@ -391,6 +453,11 @@ def create_app(data=None, testing=False, start_worker=True):
     def download(jid,kind):
         job=owned(jid)
         if job['state']!='ready': abort(409)
+        if kind=='submissions':
+            config=json.loads(job['config'])
+            if config.get('identity_mode')!='roster': abort(404)
+            return send_file(io.BytesIO(submission_csv(config,json.loads(job['results']))),
+                             as_attachment=True,download_name='submissions.csv',mimetype='text/csv')
         allowed={'students':'students.csv','classes':'class_statistics.csv','items':'item_statistics.csv','details':'results.json'}
         if kind not in allowed: abort(404)
         # Produce exports from the authoritative database snapshot, not stale disk results.
@@ -412,6 +479,9 @@ def create_app(data=None, testing=False, start_worker=True):
     @app.errorhandler(503)
     def error(exc):
         return render_template('error.html',message=exc.description),exc.code
+
+    from .roster_web import register_rosters
+    register_rosters(app,data,login_required,owned,audit)
 
     if start_worker:
         # Run one service process; claim persisted jobs atomically in SQLite.
@@ -458,15 +528,19 @@ def process_job(data,job):
         # Deployment paths can change between containers.
         config['template_image']=str(Path(__file__).parent/'layouts/delia-template.png')
         code=run([directory/'input'],config,directory/'output')
-        rows=json.loads((directory/'output/results.json').read_text())
+        rows=json.loads((directory/'output/results.json').read_text(encoding='utf-8'))
         if code or not rows:
             raise ValueError('Some sheets failed processing. Check scan quality and retry; partial batches cannot be finalized.')
+        assign_roster(rows,config)
         rows=relative_evidence(rows,directory/'output')
         if storage:
             validate_evidence(rows,directory/'output')
             storage.save_tree(job_prefix(job)+'/output',directory/'output')
         with connect(data) as db:
             db.execute('UPDATE jobs SET state=?,results=?,error=?,updated=? WHERE id=?',('ready',json.dumps(rows,ensure_ascii=False),'',time.time(),job['id']))
+            if config.get('identity_mode')=='roster':
+                db.execute('INSERT INTO audit(job,actor,at,action,detail) VALUES(?,?,?,?,?)',
+                           (job['id'],job['owner'],time.time(),'roster_assigned',json.dumps({'sheets':len(rows),'order':'numeric_class_number'})))
         if storage:
             shutil.rmtree(directory,ignore_errors=True)
     except Exception:

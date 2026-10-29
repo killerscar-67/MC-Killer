@@ -1,0 +1,36 @@
+{% extends 'base.html' %}{% block body %}
+<a class="back" href="{{url_for('index')}}">← Assessments</a>
+<h1>New exam assessment</h1><p class="muted">Student identities follow the class list. Handwritten fields are kept as images; no handwriting OCR is needed.</p>
+<form method="post" enctype="multipart/form-data" class="creation-grid" id="roster-assessment">
+<input type="hidden" name="csrf" value="{{session.csrf}}"><input type="hidden" name="identity_mode" value="roster">
+<div class="card">
+<h2><span class="step-number">1</span> Assessment details</h2>
+<label>Assessment name<input name="title" maxlength="160" value="{{request.form.get('title','')}}" required></label>
+<div class="two-col"><label>Subject<input name="subject" maxlength="160" value="{{request.form.get('subject','')}}"></label><label>Level / form<input name="level" maxlength="80" value="{{request.form.get('level','')}}"></label></div>
+<h2 class="spaced"><span class="step-number">2</span> Answer key & scoring</h2>
+<div class="three-col"><label>Questions<input name="count" type="number" min="1" max="100" value="{{request.form.get('count','10')}}" required></label><label>Wrong-answer mark<input name="wrong" type="number" step="any" value="{{request.form.get('wrong','0')}}" required></label><label>Pass percentage<input name="pass" type="number" min="0" max="100" step="any" value="{{request.form.get('pass','50')}}" required></label></div>
+<label>Correct answers, in order<textarea name="key" rows="3" required spellcheck="false">{{request.form.get('key','')}}</textarea></label><p class="hint">A–D only. Correct +1, blank/multiple 0. Questions after your key are ignored.</p>
+</div>
+<section class="card">
+<h2><span class="step-number">3</span> Class list &amp; absences</h2>
+<label>Saved roster<select name="roster_id" id="saved-roster-source"><option value="">Upload a one-off CSV instead</option>{% for r in rosters %}<option value="{{r.id}}" {{'selected' if request.args.get('roster')==r.id}}>{{r.title}} · {{r.school_year}}</option>{% endfor %}</select></label><input type="hidden" name="roster_version" id="saved-roster-version"><p><a href="{{url_for('lists.index')}}">Add or edit saved rosters</a>. Roster changes do not alter past assessments.</p><label>One-off class-list CSV<input type="file" name="roster" id="roster-file" accept=".csv,text/csv"></label>
+<p class="hint">Export as UTF-8 CSV with <strong>class, number, name</strong> columns. One class per CSV; saved rosters can include several classes. Students are sorted by class and numeric class number; leading zeros are kept.</p>
+<pre class="roster-example">class,number,name
+3A,01,Example Student
+3A,02,Another Student</pre>
+<button type="button" id="preview-roster" data-url="{{url_for('preview_roster')}}">Preview class list</button>
+<p id="roster-status" role="status" aria-live="polite">Preview the class list, then mark students who were absent.</p>
+<input type="hidden" name="roster_digest" id="roster-digest">
+<div id="roster-preview" class="roster-preview"></div>
+<label class="checkbox"><input type="checkbox" name="roster_order_confirmed" id="roster-order-confirmed" value="yes" required> The exam papers follow the displayed class-number order, skipping absent students.</label>
+</section>
+<section class="card roster-upload">
+<h2><span class="step-number">4</span> Upload exam sheets</h2>
+<label class="upload-zone"><strong>Choose your scanned sheets</strong><span>PDF, PNG, JPEG, TIFF or BMP</span><input type="file" name="scans" accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff,.bmp" multiple required><small>Up to 50 MB and 200 pages per batch</small></label>
+<p class="hint">Upload one sheet per non-absent student. For multiple files, the displayed file order is used, with pages in PDF/TIFF order. Keep the Delia sheet upright with all edges visible.</p>
+<ol id="scan-order" class="hint"></ol>
+<p class="hint">Each sheet is assigned to the next student sitting the exam. The sheet count must match before marking starts.</p>
+<button class="primary wide" id="start-roster-marking" disabled>Start marking →</button>
+<noscript><p class="warning">Enable JavaScript to preview the class list and select absentees.</p></noscript>
+</section>
+</form>{% endblock %}

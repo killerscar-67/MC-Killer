@@ -1,5 +1,23 @@
 # Changelog
 
+## 2026-10-28 — Editable reusable rosters (PR #5 draft)
+
+- Added teacher-private saved rosters, CSV/XLSX import with preview/confirmation, manual additions, transfers, withdrawals/reactivation, stable student references and versioned audit history.
+- New assessments can reuse saved rosters and retain independent candidate snapshots. Existing one-off CSV and class-number scan order remain supported. No QR identification or personalised printing is included.
+- Added explicit candidate updates and image-based sheet-to-student reassignment while results remain open, preserving original identities. Submitted/finalised history is not silently rewritten by school roster edits.
+- Added missing-submission exports and complete unique-candidate assignment checks before finalisation.
+- Added an additive backend-only PostgreSQL migration with RLS/audit permissions plus local SQLite support. Migration and deployment remain pending.
+- Added regression coverage for stable references, XLSX/CSV, inactive students, stale/unauthorised edits, snapshots, candidate updates, reassignment and finalisation.
+
+## 2026-10-27 — Roster-order identity workflow (PR #5)
+
+- Replaced the OCR-experiment scope with class-list CSV preview, numeric class-number order and explicit absence selection.
+- New web assessments require sheet count to equal non-absent students and assign names/classes/numbers from the confirmed roster snapshot.
+- Skip all handwritten-field OCR in roster mode while retaining five written-field image crops; subject comes from assessment details.
+- Added attendance/submission table and private UTF-8 CSV export, roster confirmation/assignment audit, read-only roster identities and post-processing count checks.
+- Existing assessments and legacy CLI/API configurations keep their previous OCR workflow. No roster migration, model download or deployment is included.
+- See docs/ROSTER_ORDER.md for ordering and file-format requirements.
+
 ## Unreleased
 
 ### 2026-10-27: labelled-batch mismatch fixes

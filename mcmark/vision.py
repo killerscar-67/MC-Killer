@@ -379,6 +379,10 @@ def metadata(gray, config, log, evidence_dir=None, evidence_prefix="sheet"):
                 if not cv2.imwrite(str(destination), evidence):
                     raise OSError(f'Could not save metadata evidence: {destination}')
                 detail['crop'] = str(destination.resolve())
+            if config.get('identity_mode')=='roster':
+                result[name]=''
+                detail.update(status='image_only',raw_text='',identity_source='roster_order')
+                continue
             try:
                 from .ocr import recognize
                 text = recognize(crop, config.get('ocr_engine','auto'))

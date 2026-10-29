@@ -96,7 +96,7 @@ def export(results, config, output, events):
             # Prevent spreadsheet formula execution from OCR text and filenames.
             writer.writerows({k: ("'"+str(v) if isinstance(v, str) and v.lstrip().startswith(('=', '+', '-', '@')) else v) for k,v in row.items()} for row in rows)
     metadata_fields = list(dict.fromkeys(['name','signature','class','student_id','subject_paper', *config.get('metadata', {})]))
-    fields = ['file','page', *metadata_fields, 'review_required','score_is_provisional','score','maximum','percent','passed']
+    fields = ['file','page','student_record_id','identity_source', *metadata_fields, 'review_required','score_is_provisional','score','maximum','percent','passed']
     for name in config.get('metadata', {}):
         if config['metadata'][name]['mode'] == 'ocr':
             fields.extend([f'{name}_confidence', f'{name}_status', f'{name}_crop'])

@@ -65,6 +65,13 @@ def run(inputs, config, output, corrections=None):
             log('file_error', error=str(exc))
     if corrections:
         apply_corrections(results,config,corrections)
+    if config.get('identity_mode')=='roster':
+        from .roster import assign_roster
+        # Never compress identities around failed pages. A failed batch cannot
+        # publish order-based assignments or be finalized.
+        if any(e['kind'] in {'sheet_error','file_error'} for e in events):
+            raise ValueError('Some sheets failed processing; roster identities were not assigned.')
+        assign_roster(results,config)
     export(results,config,out,events)
     write_review(results,out)
     return 2 if any(e['kind'] in {'sheet_error','file_error'} for e in events) else 0

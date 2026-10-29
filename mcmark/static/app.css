@@ -14,3 +14,6 @@
 .review-response-layout{grid-template-columns:minmax(0,1fr) minmax(360px,420px)}.review-response-controls .answer-buttons>.choice-buttons{display:flex;flex-wrap:nowrap;gap:.4rem;overflow-x:auto;padding:3px}.review-response-controls .answer-buttons>.choice-buttons>.choice-button{flex:0 0 auto}.review-response-controls .choice-button span{padding:.6rem .65rem;min-width:38px}.review-response-controls .answer-buttons>.choice-buttons>.choice-button:nth-child(-n+2){grid-column:auto}@media(max-width:800px){.review-response-layout{grid-template-columns:1fr}}
 
 .batch-review-tools{display:flex;flex-wrap:wrap;gap:.7rem;align-items:center;margin:1rem 0}.batch-review-tools .hint{flex-basis:100%}
+.roster-upload{grid-column:1/-1}.roster-preview{max-height:360px;overflow:auto;margin:1rem 0}.roster-preview input{width:auto;margin:0}.roster-preview td{padding:10px}.roster-example{white-space:pre-wrap;background:#f3f6f3;padding:12px;border-radius:8px;font-size:12px}
+
+.identity-preview{width:100%;max-width:650px;height:350px;object-fit:cover;object-position:top} .account>a{color:inherit} details>form{margin-top:1rem}
