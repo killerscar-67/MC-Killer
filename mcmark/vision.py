@@ -226,9 +226,32 @@ def align(gray, config):
     return cv2.warpPerspective(scaled, matrix, (w,h), borderValue=255)
 
 
+def verify_printed_anchors(window, target, pad, offset, height):
+    """Independently locate printed letters above the answer boxes.
+
+    Never move the answer sampling position: a unique printed maximum must
+    agree with the existing whole-row result before it can verify alignment.
+    """
+    anchor=target[:height]
+    if height<6 or np.std(anchor)<15 or np.count_nonzero(anchor<200)<20:
+        return {'verified':False,'reason':'insufficient_printed_structure'}
+    search=window[:height+2*pad]
+    matches=cv2.matchTemplate(search,anchor,cv2.TM_CCOEFF_NORMED)
+    matches=np.nan_to_num(matches,nan=-1,posinf=-1,neginf=-1)
+    _,score,_,position=cv2.minMaxLoc(matches)
+    dx,dy=position[0]-pad,position[1]-pad
+    alternatives=matches.copy()
+    alternatives[max(0,position[1]-2):position[1]+3,max(0,position[0]-2):position[0]+3]=-1
+    margin=float(score-np.max(alternatives))
+    verified=(np.isfinite(score) and score>=.70 and abs(dx)<pad and abs(dy)<pad
+              and max(abs(dx-offset[0]),abs(dy-offset[1]))<=1 and margin>=.02)
+    return {'verified':bool(verified),'score':float(score),'offset':[dx,dy],
+            'peak_margin':margin,'minimum_score':.70,'height':height}
+
+
 def apply_review_policy(reading, config):
     """Accept isolated, well-registered strokes; preserve all ambiguous evidence."""
-    reading['review_policy'] = 'balanced-v3'
+    reading['review_policy'] = 'balanced-v4'
     reading['original_review_reasons'] = list(reading['review_reasons'])
     if config.get('review_policy') == 'conservative':
         reading['review_policy'] = 'conservative'
@@ -250,7 +273,16 @@ def apply_review_policy(reading, config):
     if minor_spill and (mark.get('outside_ink_pixels',float('inf'))>spill_limit
         or any(c.get('outside_ink_pixels',float('inf'))>4 for option,c in clues.items() if option!=label)):
         return reading
-    if (reading.get('alignment_score', 0) >= .70
+    alignment_score=reading.get('alignment_score',0)
+    alignment_source='whole_row'
+    anchors=reading.get('printed_alignment',{})
+    if .60<=alignment_score<.70 and anchors.get('verified'):
+        # Printed position cannot resolve detached cancellation strokes.
+        # Keep detached spill pending when whole-row evidence is weak.
+        if any(c.get('detached_spill_pixels',0)>2 for c in clues.values()):
+            return reading
+        alignment_score=anchors.get('score',0);alignment_source='printed_anchor_agreement'
+    if (alignment_score >= .70
         and reading['densities'][label] >= .08
         and mark.get('stroke_area', 0) >= 10
         and mark.get('stroke_span', 0) >= 7
@@ -259,6 +291,7 @@ def apply_review_policy(reading, config):
         reading['review_reasons'] = []
         reading['auto_accept_reason'] = ('isolated_compact_fill' if 'possible_cancellation_stroke' in reasons
                                         else 'isolated_mark_minor_spill' if minor_spill else 'isolated_registered_stroke')
+        reading['auto_accept_alignment_source']=alignment_source
     return reading
 
 
@@ -300,9 +333,11 @@ def detect(gray, grid, config):
         else:
             reading=detect(patch,local_grid,{**config,'_local_aligned':True,'_template_array':target})
         reading['local_offset']=[dx,dy];reading['alignment_score']=float(score);reading['local_search_radius']=pad
-        reading['alignment_version']='row-bounded-v2'
+        reading['alignment_version']='row-bounded-v3'
         if pad>5 and 'uncertain_local_alignment' not in reading['review_reasons']:
             reading['alignment_recovery']={'initial':initial,'offset':[dx,dy],'radius':pad,'score':float(score)}
+        if .60<=score<.70 and len(reading['selected'])==1 and reading['review_reasons'] and 'uncertain_local_alignment' not in reading['review_reasons']:
+            reading['printed_alignment']=verify_printed_anchors(window,target,pad,[dx,dy],int(min(ys)-top-8))
         return apply_review_policy(reading,config)
     radius = grid.get('radius', config.get('radius', 10)) * .65
     densities = {}
@@ -391,7 +426,7 @@ def detect(gray, grid, config):
         else remaining if (crossed or len(thin_candidates)==1) and len(remaining)==1 and len(thin_candidates)<=1 else None)
     return {'selected':selected, 'raw_selected':raw_selected, 'densities':densities,
             'uncertain':uncertain, 'mark_clues':clues, 'review_reasons':list(dict.fromkeys(reasons)),
-            'detector_version':'stroke-v2.3', 'thin_candidates':thin_candidates,
+            'detector_version':'stroke-v2.4', 'thin_candidates':thin_candidates,
             'suggested_selected':suggestion, 'suggestion_basis':'extended_diagonal' if extended_diagonals and suggestion else 'cross_or_thin' if suggestion else None}
 
 

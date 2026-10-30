@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-30 — Printed-anchor alignment verification
+
+- Added a bounded printed-letter search for weak whole-row matches, requiring correlation >=0.70, a unique peak and agreement within one pixel. Raw scores and answer sampling positions are preserved.
+- Retained cancellation and competing-mark guards; detached spill blocks this new clearance path. Rejected a more permissive trial after a faint-cross regression.
+- Final labelled development replay: 54 → 47 pending of 240, unchanged 233 direct matches and all seven mismatches still flagged. This is development evidence, not a promised hosted review rate.
+- Local suite: 92 Python tests (91 passed, one PostgreSQL integration skip), plus five JavaScript checks. No deployment or existing-assessment rewrite.
+
 ## 2026-10-30 — Print-aware spill and compact-fill checks
 
 - Retained the 0.70 automatic review-clearance score. Stroke-v2.3 / balanced-v3 excludes the printed one-pixel halo from stray-ink counting, retains raw counts for cancellation evidence and measures spill connectivity without changing density readings.

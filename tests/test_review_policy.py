@@ -75,3 +75,21 @@ class ReviewPolicyTests(unittest.TestCase):
         self.assertEqual(apply_review_policy(copy.deepcopy(r),{})['review_reasons'],[])
         r['mark_clues']['B']['detached_spill_pixels']=5
         self.assertTrue(apply_review_policy(r,{})['review_reasons'])
+
+    def test_verified_printed_anchors_still_require_070_and_all_shape_guards(self):
+        r=self.reading();r['alignment_score']=.65
+        r['printed_alignment']={'verified':True,'score':.90}
+        result=apply_review_policy(copy.deepcopy(r),{})
+        self.assertEqual(result['review_reasons'],[])
+        self.assertEqual(result['alignment_score'],.65) # raw score is not rewritten
+        self.assertEqual(result['auto_accept_alignment_source'],'printed_anchor_agreement')
+        for failure in ('no_agreement','weak_anchor','weak_raw','cross','competing','detached_spill','failed_alignment','conservative'):
+            v=copy.deepcopy(r)
+            if failure=='no_agreement':v['printed_alignment']['verified']=False
+            if failure=='weak_anchor':v['printed_alignment']['score']=.699
+            if failure=='weak_raw':v['alignment_score']=.599
+            if failure=='cross':v['mark_clues']['B']['cross_suspected']=True
+            if failure=='competing':v['mark_clues']['A']['new_ink_pixels']=3
+            if failure=='detached_spill':v['mark_clues']['B']['detached_spill_pixels']=3
+            if failure=='failed_alignment':v['review_reasons'].append('uncertain_local_alignment')
+            self.assertTrue(apply_review_policy(v,{'review_policy':'conservative'} if failure=='conservative' else {})['review_reasons'])
