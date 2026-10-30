@@ -115,10 +115,22 @@ def write_review(results, output):
         +(''.join(sections) or '<p>No question reviews are pending. Check students.csv for metadata or identity review flags.</p>')+'</html>',encoding='utf-8')
 
 
+def visual_review_eligible(answer):
+    """A single current choice can be explicitly confirmed after seeing its image.
+
+    This does not grant automatic eligibility or suppress cancellation warnings.
+    Failed alignment must be corrected before a compact confirmation is offered.
+    """
+    return (len(answer.get('selected',[]))==1 and bool(answer.get('review_reasons'))
+            and not answer.get('teacher_review')
+            and 'uncertain_local_alignment' not in answer.get('review_reasons',[]))
+
+
 def batch_review_eligible(answer):
     """Permit explicit visual batch confirmation only for isolated single choices."""
     blockers={'multiple','blank','possible_cross_out','possible_cancellation_stroke',
-              'uncertain_local_alignment','ambiguous_thin_marks'}
+              'uncertain_local_alignment','ambiguous_thin_marks',
+              'unresolved_competing_ink','unresolved_cross_geometry'}
     return (len(answer.get('selected',[]))==1 and bool(answer.get('review_reasons'))
             and not answer.get('teacher_review')
             and not blockers.intersection(answer.get('review_reasons',[]))

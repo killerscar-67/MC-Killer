@@ -99,3 +99,9 @@ With `MCK_DATABASE_URL`, the app uses Supabase PostgreSQL in a private `mc_kille
 
 
 For Supabase setup, see [PostgreSQL deployment](docs/SUPABASE.md). The database migration is prepared in `supabase/migrations/`; committing it does not create a hosted project. No existing SQLite/student data is uploaded automatically. For private scan storage, see [storage setup and migration](docs/STORAGE.md).
+
+On **Review flagged answers by question**, use the assessment-wide controls at the top to select eligible single choices and prepare confirmation across all questions. Question-level buttons remain available. Inspect images first, then select **Save selected decisions & recalculate** to apply. Existing manual choices are kept; cancelled/multiple/blank marks, uncertain alignment and unavailable images remain for individual review.
+
+For singles excluded by cancellation/stroke checks, **Quick visual check** shows compact evidence cards. Inspect the images, select displayed choices you want to keep, confirm, then save. This is explicit teacher review, not automatic acceptance. Unresolved alignment failures are grouped by sheet and excluded from this view. See [review efficiency and alignment checks](docs/REVIEW_EFFICIENCY.md).
+
+The latest detector retains a 0.70 review-clearance correlation minimum and combines print-aware ink context, sampling stability and narrow fill geometry with cancellation safeguards. The current development benchmark needs 35/240 reviews (14.58%), with unchanged selections and no observed unflagged errors. This is not a guaranteed production rate; degraded inputs and residual synthetic cancellation failures are documented in the [full research report](docs/REVIEW_REDUCTION_RESEARCH.md).

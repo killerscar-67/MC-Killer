@@ -1,5 +1,40 @@
 # Changelog
 
+## 2026-10-30 — Research-led review reduction (PR #7)
+
+- Added remote-ink context beside empty options, fifteen template-subtracted sampling/contrast checks and a narrow horizontal-fill exception. Retained the 0.70 acceptance correlation minimum, raw evidence and all selections/suggestions.
+- Added radial/sparse-cross vetoes and explicit unresolved competing-ink review, including exclusion from automatic bulk selection. These strengthen cancellation handling while preserving image-based teacher confirmation.
+- Fresh registered-PDF development replay: 47 → 35 pending of 240 (14.58%); unchanged 233 direct matches and all seven mismatches flagged. Six derived image conditions show no unflagged errors; degraded inputs can exceed 15% review.
+- Expanded cancellation stress: 37 → 17 automatic acceptances across 360 synthetic scenarios, no newly accepted cases. The remaining 17 are documented failures, not passed tests or a zero-risk claim.
+- Added a reproducible private-data benchmark and a sourced research report covering alternatives, ablations, accuracy limits and independent-validation requirements. Local checks: 101 Python tests (100 passed, one PostgreSQL integration skip), five JavaScript checks passed. No merge, deployment or existing-assessment rewrite.
+
+## 2026-10-30 — Printed-anchor alignment verification
+
+- Added a bounded printed-letter search for weak whole-row matches, requiring correlation >=0.70, a unique peak and agreement within one pixel. Raw scores and answer sampling positions are preserved.
+- Retained cancellation and competing-mark guards; detached spill blocks this new clearance path. Rejected a more permissive trial after a faint-cross regression.
+- Final labelled development replay: 54 → 47 pending of 240, unchanged 233 direct matches and all seven mismatches still flagged. This is development evidence, not a promised hosted review rate.
+- Local suite: 92 Python tests (91 passed, one PostgreSQL integration skip), plus five JavaScript checks. No deployment or existing-assessment rewrite.
+
+## 2026-10-30 — Print-aware spill and compact-fill checks
+
+- Retained the 0.70 automatic review-clearance score. Stroke-v2.3 / balanced-v3 excludes the printed one-pixel halo from stray-ink counting, retains raw counts for cancellation evidence and measures spill connectivity without changing density readings.
+- Added a compact-fill check (at least 80% inner fill with at most two ink pixels beyond the fill body) for short diagonal warnings. Genuine cross clues, competing marks, weak alignment and conservative mode remain pending. A compact fill may tolerate connected spill up to 24 pixels only when at most two spill pixels are detached; other spill retains the 16-pixel cap.
+- Labelled development replay: 61 → 54 pending answers (originally 63), unchanged 233/240 direct agreement and zero observed unflagged errors. All seven existing mismatches remain flagged. Six earlier sheets retain all 600 selections/suggestions.
+- Added regression checks for printed-border halos, attached versus detached ink, compact fills, competing marks and dark/faint rotated crosses. Independent new-scanner/writer validation remains outstanding.
+
+## 2026-10-30 — Retain the 0.70 acceptance threshold
+
+- Kept row-match correlation at 0.70 after testing 0.65 and 0.60. The 0.60 trial gave no additional benefit over 0.65. With the other bounded improvements retained, 0.70 gives 61 pending answers (originally 63), unchanged selections and zero observed unflagged errors on the 240-answer development batch. Compact review and alignment retries remain included.
+
+## 2026-10-29 — Faster visual review and bounded alignment recovery
+
+- Slightly relaxed automatic review clearance (balanced-v2): row correlation retained at 0.70, connected stroke area 12 → 10 pixels; tolerate up to 16 selected-box spill pixels only with at most 4 around other choices. Density/span thresholds and cancellation, competing-ink and failed-alignment guards remain. The 240-answer development replay has 63 → 61 pending answers, unchanged selections and zero observed unflagged errors.
+- Added compact, image-based confirmation of flagged single choices, including cancellation warnings after explicit teacher inspection. Failed alignment and multiple/blank readings remain separate.
+- Added sheet-level alignment summaries, low-score/boundary retries up to 14 pixels, stricter retry evidence and equal-location rounding tolerance. Recovery diagnostics are preserved; review crops follow accepted offsets.
+- Added Select eligible single choices and Confirm selected current choices controls across all questions, retaining question-level controls.
+- Bulk selection loads eligible evidence images, including offscreen/lazy images, before selecting rows. Missing/broken images stay excluded.
+- Existing manual decisions are kept. Cancellation, multiple, blank and alignment eligibility rules remain unchanged. Decisions still require Save selected decisions & recalculate; no automatic finalisation.
+
 ## 2026-10-29 — Paste and edit rosters in the browser
 
 - Moved roster renaming and school-year editing to a visible form near the title; history remains separately collapsible.

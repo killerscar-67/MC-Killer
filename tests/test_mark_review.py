@@ -90,7 +90,7 @@ class MarkReviewTests(unittest.TestCase):
             refresh_review(row)
             self.assertTrue(row['review_required'])
 
-    def test_thin_strokes_are_provisional_candidates(self):
+    def test_isolated_thin_strokes_keep_evidence_and_faint_strokes_stay_pending(self):
         from mcmark.vision import detect
         for color in (30,170):
             sheet=self.blank.copy()
@@ -99,7 +99,11 @@ class MarkReviewTests(unittest.TestCase):
             result=detect(sheet,self.q,self.config)
             self.assertEqual(result['selected'],['A'])
             self.assertEqual(result['suggested_selected'],['A'])
-            self.assertIn('thin_stroke_candidate',result['review_reasons'])
+            self.assertIn('thin_stroke_candidate',result['original_review_reasons'])
+            if color==30:
+                self.assertEqual(result['review_reasons'],[])
+                self.assertEqual(result['auto_accept_reason'],'isolated_registered_stroke')
+            else:self.assertIn('thin_stroke_candidate',result['review_reasons'])
             self.assertNotIn('blank',result['review_reasons'])
             self.assertEqual(result['raw_selected'],[])
 
@@ -114,6 +118,61 @@ class MarkReviewTests(unittest.TestCase):
                     result=detect(sheet,self.q,self.config)
                     self.assertNotIn('possible_cross_out',result['review_reasons'])
                     self.assertNotEqual(result['mark_clues']['B'].get('state'),'likely_cancelled')
+
+    def test_spill_connectivity_and_print_halo_are_separate_measurements(self):
+        from mcmark.vision import surrounding_ink
+        import numpy as np
+        template=np.full((100,100),255,np.uint8);sheet=template.copy()
+        self.cv2.rectangle(sheet,(45,49),(63,51),0,-1)
+        self.cv2.rectangle(sheet,(59,57),(62,59),0,-1)
+        grid={'sample_box':[14,4]}
+        clue=surrounding_ink(sheet,template,grid,(50,50),{})
+        self.assertGreater(clue['attached_spill_pixels'],0)
+        self.assertGreater(clue['detached_spill_pixels'],0)
+        self.assertEqual(clue['outside_ink_pixels'],clue['attached_spill_pixels']+clue['detached_spill_pixels'])
+        self.cv2.rectangle(template,(40,45),(60,55),0,1)
+        shifted=self.cv2.warpAffine(template,np.float32([[1,0,1],[0,1,0]]),(100,100),borderValue=255)
+        clue=surrounding_ink(shifted,template,grid,(50,50),{})
+        self.assertGreater(clue['raw_outside_ink_pixels'],0)
+        self.assertEqual(clue['outside_ink_pixels'],0)
+
+    def test_extended_rotated_cross_over_fill_stays_pending(self):
+        from mcmark.vision import detect
+        import math
+        for angle in (30,45,60):
+            for color in (0,170):
+                sheet=self.blank.copy();self.fill(sheet,'B');x,y=map(round,self.q['centers'][1])
+                for theta in (angle,180-angle):
+                    dx=round(11*math.cos(math.radians(theta)));dy=round(11*math.sin(math.radians(theta)))
+                    self.cv2.line(sheet,(x-dx,y-dy),(x+dx,y+dy),color,1)
+                result=detect(sheet,self.q,self.config)
+                self.assertTrue(result['review_reasons'],(angle,color))
+                self.assertFalse(result.get('auto_accept_reason'),(angle,color))
+
+    def test_unresolved_faint_competing_cross_cannot_silently_clear(self):
+        from mcmark.vision import detect
+        import math
+        for angle in (60,65):
+            for radius in (9,11):
+                sheet=self.blank.copy();self.fill(sheet,'A')
+                x,y=map(round,self.q['centers'][1])
+                for theta in (angle,180-angle):
+                    dx=round(radius*math.cos(math.radians(theta)))
+                    dy=round(radius*math.sin(math.radians(theta)))
+                    self.cv2.line(sheet,(x-dx,y-dy),(x+dx,y+dy),170,1)
+                result=detect(sheet,self.q,self.config)
+                self.assertTrue(result['review_reasons'])
+                self.assertIn('A',result['selected'])
+
+    def test_short_sparse_x_requires_review_without_discarding_selection(self):
+        from mcmark.vision import detect
+        for color in (0,100):
+            sheet=self.blank.copy();x,y=map(round,self.q['centers'][1])
+            self.cv2.line(sheet,(x-8,y-4),(x+8,y+4),color,2)
+            self.cv2.line(sheet,(x-8,y+4),(x+8,y-4),color,2)
+            result=detect(sheet,self.q,self.config)
+            self.assertIn('unresolved_cross_geometry',result['review_reasons'])
+            self.assertEqual(result['selected'],['B'])
 
     def test_looped_selection_does_not_cancel_another_choice(self):
         from mcmark.vision import detect
@@ -203,7 +262,8 @@ class MarkReviewTests(unittest.TestCase):
         result=detect(shifted,self.q,self.config)
         self.assertEqual(result['selected'],['A'])
         self.assertEqual(result['local_offset'],[2,-3])
-        self.assertIn('thin_stroke_candidate',result['review_reasons'])
+        self.assertIn('thin_stroke_candidate',result['original_review_reasons'])
+        self.assertEqual(result['auto_accept_reason'],'isolated_registered_stroke')
 
     def test_failed_local_registration_suppresses_weak_candidates(self):
         from mcmark.vision import detect
@@ -230,24 +290,40 @@ class MarkReviewTests(unittest.TestCase):
     def test_bounded_local_retry_recovers_residual_drift(self):
         from mcmark.vision import detect
         import numpy as np
-        for dx,dy in ((6,-7),(-7,6),(8,0)):
+        for dx,dy in ((6,-7),(-7,6),(8,0),(0,5),(0,9),(0,12)):
             with self.subTest(offset=(dx,dy)):
                 sheet=self.blank.copy();self.fill(sheet,'C')
                 shifted=self.cv2.warpAffine(sheet,np.float32([[1,0,dx],[0,1,dy]]),(sheet.shape[1],sheet.shape[0]),borderValue=255)
                 result=detect(shifted,self.q,self.config)
                 self.assertEqual(result['selected'],['C'])
                 self.assertEqual(result['local_offset'],[dx,dy])
-                self.assertEqual(result['local_search_radius'],9)
+                self.assertIn(result['local_search_radius'],(9,14))
+                self.assertIn('alignment_recovery',result)
                 self.assertNotIn('uncertain_local_alignment',result['review_reasons'])
 
     def test_retry_search_boundary_still_requires_review(self):
         from mcmark.vision import detect
         import numpy as np
         sheet=self.blank.copy();self.fill(sheet,'C')
-        shifted=self.cv2.warpAffine(sheet,np.float32([[1,0,0],[0,1,9]]),(sheet.shape[1],sheet.shape[0]),borderValue=255)
+        shifted=self.cv2.warpAffine(sheet,np.float32([[1,0,0],[0,1,14]]),(sheet.shape[1],sheet.shape[0]),borderValue=255)
         result=detect(shifted,self.q,self.config)
         self.assertIn('uncertain_local_alignment',result['review_reasons'])
         self.assertFalse(result.get('auto_accept_reason'))
+
+    def test_equal_offset_retry_tolerates_match_score_roundoff(self):
+        from mcmark.vision import detect
+        from unittest.mock import patch
+        import numpy as np
+        sheet=self.blank.copy();self.fill(sheet,'C')
+        shifted=self.cv2.warpAffine(sheet,np.float32([[1,0,0],[0,1,5]]),(sheet.shape[1],sheet.shape[0]),borderValue=255)
+        original=self.cv2.matchTemplate
+        def rounded(window,target,method):
+            scores=original(window,target,method)
+            return scores-0.0001 if scores.shape[0]>11 else scores
+        with patch('mcmark.vision.cv2.matchTemplate',side_effect=rounded):result=detect(shifted,self.q,self.config)
+        self.assertEqual(result['selected'],['C'])
+        self.assertNotIn('uncertain_local_alignment',result['review_reasons'])
+        self.assertEqual(result['local_offset'],[0,5])
 
     def test_small_partial_mark_is_provisional_but_nearby_speck_is_not(self):
         from mcmark.vision import detect
