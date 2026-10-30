@@ -32,9 +32,9 @@ class ReviewPolicyTests(unittest.TestCase):
         self.assertTrue(apply_review_policy(self.reading(),{'review_policy':'conservative'})['review_reasons'])
 
     def test_modest_acceptance_limits_and_minor_spill(self):
-        r=self.reading();r['alignment_score']=.65;r['mark_clues']['B']['stroke_area']=10
+        r=self.reading();r['alignment_score']=.70;r['mark_clues']['B']['stroke_area']=10
         self.assertEqual(apply_review_policy(r,{})['review_reasons'],[])
-        for field,value in [('alignment',.649),('area',9),('span',6),('density',.079)]:
+        for field,value in [('alignment',.699),('area',9),('span',6),('density',.079)]:
             r=self.reading()
             if field=='alignment':r['alignment_score']=value
             elif field=='density':r['densities']['B']=value

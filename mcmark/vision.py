@@ -219,7 +219,7 @@ def apply_review_policy(reading, config):
     if minor_spill and (mark.get('outside_ink_pixels',float('inf'))>16
         or any(c.get('outside_ink_pixels',float('inf'))>4 for option,c in clues.items() if option!=label)):
         return reading
-    if (reading.get('alignment_score', 0) >= .65
+    if (reading.get('alignment_score', 0) >= .70
         and reading['densities'][label] >= .08
         and mark.get('stroke_area', 0) >= 10
         and mark.get('stroke_span', 0) >= 7
