@@ -51,3 +51,27 @@ class ReviewPolicyTests(unittest.TestCase):
             self.assertTrue(apply_review_policy(unsafe,{})['review_reasons'])
         del r['mark_clues']['A']['outside_ink_pixels']
         self.assertTrue(apply_review_policy(r,{})['review_reasons'])
+
+    def test_compact_fill_can_clear_short_diagonal_but_never_a_cross_or_bad_alignment(self):
+        r=self.reading();r['review_reasons']=['possible_cancellation_stroke'];mark=r['mark_clues']['B']
+        mark.update(compact_fill=True,diagonal_clue=True)
+        result=apply_review_policy(copy.deepcopy(r),{})
+        self.assertEqual(result['review_reasons'],[])
+        self.assertEqual(result['auto_accept_reason'],'isolated_compact_fill')
+        self.assertEqual(result['original_review_reasons'],['possible_cancellation_stroke'])
+        for change in ('not_compact','cross','competing','alignment','other_diagonal','conservative'):
+            candidate=copy.deepcopy(r)
+            if change=='not_compact':candidate['mark_clues']['B']['compact_fill']=False
+            if change=='cross':candidate['mark_clues']['B']['cross_suspected']=True
+            if change=='competing':candidate['mark_clues']['A']['new_ink_pixels']=3
+            if change=='alignment':candidate['alignment_score']=.699
+            if change=='other_diagonal':candidate['mark_clues']['A']['diagonal_clue']=True
+            self.assertTrue(apply_review_policy(candidate,{'review_policy':'conservative'} if change=='conservative' else {})['review_reasons'])
+
+    def test_connected_compact_spill_exception_does_not_accept_detached_ink(self):
+        r=self.reading();r['review_reasons']=['stray_ink_or_cancellation']
+        r['mark_clues']['B'].update(compact_fill=True,outside_ink_pixels=22,detached_spill_pixels=1)
+        r['mark_clues']['A']['outside_ink_pixels']=0
+        self.assertEqual(apply_review_policy(copy.deepcopy(r),{})['review_reasons'],[])
+        r['mark_clues']['B']['detached_spill_pixels']=5
+        self.assertTrue(apply_review_policy(r,{})['review_reasons'])

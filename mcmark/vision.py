@@ -26,7 +26,18 @@ def surrounding_ink(gray, template, grid, center, config):
            (patch < config.get('extra_ink_threshold',180))).astype(np.uint8)*255
     yy,xx = np.ogrid[top:bottom,left:right]
     outside = (abs(xx-x)>bw/2+3) | (abs(yy-y)>bh/2+3)
-    count = int(np.count_nonzero(ink[outside]))
+    raw_count = int(np.count_nonzero(ink[outside]))
+    # Residual printed borders/letters are not student ink. Remove their
+    # one-pixel registration halo before counting detached spill.
+    printed=cv2.dilate((reference<200).astype(np.uint8),np.ones((3,3),np.uint8))
+    clean=(ink>0)&(printed==0)
+    count = int(np.count_nonzero(clean[outside]))
+    # Bridge at most a one-pixel gap for connectivity only; never add those
+    # dilated pixels to optical density or ink counts.
+    _,components=cv2.connectedComponents(cv2.dilate(clean.astype(np.uint8),np.ones((3,3),np.uint8)),connectivity=8)
+    core=(abs(xx-x)<=bw/2)&(abs(yy-y)<=bh/2)
+    linked_ids=np.unique(components[core & clean]);linked_ids=linked_ids[linked_ids!=0]
+    attached=int(np.count_nonzero(clean & outside & np.isin(components,linked_ids)))
     slopes = set()
     lines = cv2.HoughLinesP(ink,1,np.pi/180,threshold=8,minLineLength=12,maxLineGap=3)
     if lines is not None:
@@ -34,7 +45,9 @@ def surrounding_ink(gray, template, grid, center, config):
             dx,dy = int(x2-x1),int(y2-y1)
             if dx and .35 <= abs(dy/dx) <= 3 and min(y1,y2)+top < y-bh/2-2 and max(y1,y2)+top > y+bh/2+2:
                 slopes.add(1 if dx*dy>0 else -1)
-    return {'outside_ink_pixels':count, 'cross_suspected':len(slopes)==2}
+    return {'outside_ink_pixels':count,'raw_outside_ink_pixels':raw_count,
+            'attached_spill_pixels':attached,'detached_spill_pixels':count-attached,
+            'cross_suspected':len(slopes)==2}
 
 
 def diagonal_support(ink, center):
@@ -122,7 +135,20 @@ def stroke_features(gray, template, grid, center, config):
     support=diagonal_support(line_ink,(x-left,y-top))
     straight=[value>=.8 for value in support]
     cross=(cross or all(arms)) and all(arms) and all(straight)
+    # Measure diagonal arms beyond the filled box, using print-masked ink.
+    # Dense rectangles can satisfy short diagonal tests inside their body.
+    far_arms=[]
+    for sx,sy in ((-1,-1),(-1,1),(1,-1),(1,1)):
+        region=(sx*(xx-x)>=bw/2-2)&(sy*(yy-y)>=bh/2+4)
+        far_arms.append(int(np.count_nonzero(ink[region])))
+    fill_core=(abs(xx-x)<=bw/2-2)&(abs(yy-y)<=bh/2)
+    fill_coverage=float(np.mean(line_ink[fill_core]>0)) if np.any(fill_core) else 0.0
+    beyond_body=(abs(yy-y)>=bh/2+4)|(abs(xx-x)>=bw/2+4)
+    far_pixels=int(np.count_nonzero(ink[beyond_body]))
+    compact_fill=fill_coverage>=.80 and far_pixels<=2
     return {'new_ink_pixels':int(inner.sum()),'stroke_area':area,'stroke_span':span,
+            'fill_core_coverage':fill_coverage,'far_arm_pixels':far_arms,
+            'beyond_fill_body_pixels':far_pixels,'compact_fill':bool(compact_fill),
             'thin_candidate':bool(thin),'diagonal_clue':bool(any(arms) and any(straight)), 'compact_cross_suspected':bool(cross),
             'straight_diagonal_support':support}
 
@@ -202,7 +228,7 @@ def align(gray, config):
 
 def apply_review_policy(reading, config):
     """Accept isolated, well-registered strokes; preserve all ambiguous evidence."""
-    reading['review_policy'] = 'balanced-v2'
+    reading['review_policy'] = 'balanced-v3'
     reading['original_review_reasons'] = list(reading['review_reasons'])
     if config.get('review_policy') == 'conservative':
         reading['review_policy'] = 'conservative'
@@ -210,23 +236,29 @@ def apply_review_policy(reading, config):
     selected = reading['selected']
     reasons = set(reading['review_reasons'])
     # Never suppress competing ink, cancellation clues or failed registration.
-    if len(selected) != 1 or reasons - {'uncertain_density', 'faint_or_partial_mark', 'thin_stroke_candidate','stray_ink_or_cancellation'}:
+    if len(selected) != 1 or reasons - {'uncertain_density', 'faint_or_partial_mark', 'thin_stroke_candidate','stray_ink_or_cancellation','possible_cancellation_stroke'}:
         return reading
     label = selected[0]
     clues = reading.get('mark_clues', {})
     mark = clues.get(label, {})
+    compact_fill=bool(mark.get('compact_fill'))
+    if 'possible_cancellation_stroke' in reasons and not compact_fill:return reading
     minor_spill=('stray_ink_or_cancellation' in reasons)
-    if minor_spill and (mark.get('outside_ink_pixels',float('inf'))>16
+    # A verified compact fill can have connected pen spill, but detached
+    # marks retain the smaller limit. This never overrides cross evidence.
+    spill_limit=24 if compact_fill and mark.get('detached_spill_pixels',float('inf'))<=2 else 16
+    if minor_spill and (mark.get('outside_ink_pixels',float('inf'))>spill_limit
         or any(c.get('outside_ink_pixels',float('inf'))>4 for option,c in clues.items() if option!=label)):
         return reading
     if (reading.get('alignment_score', 0) >= .70
         and reading['densities'][label] >= .08
         and mark.get('stroke_area', 0) >= 10
         and mark.get('stroke_span', 0) >= 7
-        and not any(c.get('cross_suspected') or c.get('diagonal_clue') for c in clues.values())
+        and not any(c.get('cross_suspected') or (c.get('diagonal_clue') and (option!=label or not compact_fill)) for option,c in clues.items())
         and all(c.get('new_ink_pixels', 0) <= 2 for option,c in clues.items() if option != label)):
         reading['review_reasons'] = []
-        reading['auto_accept_reason'] = 'isolated_mark_minor_spill' if minor_spill else 'isolated_registered_stroke'
+        reading['auto_accept_reason'] = ('isolated_compact_fill' if 'possible_cancellation_stroke' in reasons
+                                        else 'isolated_mark_minor_spill' if minor_spill else 'isolated_registered_stroke')
     return reading
 
 
@@ -324,7 +356,7 @@ def detect(gray, grid, config):
             feature=stroke_features(gray,template,grid,center,config)
             clue=clues.setdefault(label,{})
             clue.update(feature)
-            clue['cross_suspected']=bool(feature['compact_cross_suspected'] or (clue.get('cross_suspected') and clue.get('outside_ink_pixels',0)>=30))
+            clue['cross_suspected']=bool(feature['compact_cross_suspected'] or (clue.get('cross_suspected') and clue.get('raw_outside_ink_pixels',clue.get('outside_ink_pixels',0))>=30))
             if clue['cross_suspected']:
                 reasons.append('possible_cross_out')
             elif feature['diagonal_clue']:
@@ -351,7 +383,7 @@ def detect(gray, grid, config):
     for label in crossed:
         clues[label]['state']='likely_cancelled' if remaining else 'ambiguous'
     extended_diagonals=[label for label in selected if clues.get(label,{}).get('diagonal_clue')
-        and clues[label].get('outside_ink_pixels',0)>=20
+        and clues[label].get('raw_outside_ink_pixels',clues[label].get('outside_ink_pixels',0))>=20
         and all(v>=.8 for v in clues[label].get('straight_diagonal_support',[0,0]))]
     cancellation_candidates=set(crossed)|set(extended_diagonals)
     suggestion_remaining=[label for label in selected if label not in cancellation_candidates]
@@ -359,7 +391,7 @@ def detect(gray, grid, config):
         else remaining if (crossed or len(thin_candidates)==1) and len(remaining)==1 and len(thin_candidates)<=1 else None)
     return {'selected':selected, 'raw_selected':raw_selected, 'densities':densities,
             'uncertain':uncertain, 'mark_clues':clues, 'review_reasons':list(dict.fromkeys(reasons)),
-            'detector_version':'stroke-v2.2', 'thin_candidates':thin_candidates,
+            'detector_version':'stroke-v2.3', 'thin_candidates':thin_candidates,
             'suggested_selected':suggestion, 'suggestion_basis':'extended_diagonal' if extended_diagonals and suggestion else 'cross_or_thin' if suggestion else None}
 
 

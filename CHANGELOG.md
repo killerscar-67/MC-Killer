@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-30 — Print-aware spill and compact-fill checks
+
+- Retained the 0.70 automatic review-clearance score. Stroke-v2.3 / balanced-v3 excludes the printed one-pixel halo from stray-ink counting, retains raw counts for cancellation evidence and measures spill connectivity without changing density readings.
+- Added a compact-fill check (at least 80% inner fill with at most two ink pixels beyond the fill body) for short diagonal warnings. Genuine cross clues, competing marks, weak alignment and conservative mode remain pending. A compact fill may tolerate connected spill up to 24 pixels only when at most two spill pixels are detached; other spill retains the 16-pixel cap.
+- Labelled development replay: 61 → 54 pending answers (originally 63), unchanged 233/240 direct agreement and zero observed unflagged errors. All seven existing mismatches remain flagged. Six earlier sheets retain all 600 selections/suggestions.
+- Added regression checks for printed-border halos, attached versus detached ink, compact fills, competing marks and dark/faint rotated crosses. Independent new-scanner/writer validation remains outstanding.
+
 ## 2026-10-30 — Retain the 0.70 acceptance threshold
 
 - Kept row-match correlation at 0.70 after testing 0.65 and 0.60. The 0.60 trial gave no additional benefit over 0.65. With the other bounded improvements retained, 0.70 gives 61 pending answers (originally 63), unchanged selections and zero observed unflagged errors on the 240-answer development batch. Compact review and alignment retries remain included.

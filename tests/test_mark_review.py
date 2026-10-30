@@ -119,6 +119,36 @@ class MarkReviewTests(unittest.TestCase):
                     self.assertNotIn('possible_cross_out',result['review_reasons'])
                     self.assertNotEqual(result['mark_clues']['B'].get('state'),'likely_cancelled')
 
+    def test_spill_connectivity_and_print_halo_are_separate_measurements(self):
+        from mcmark.vision import surrounding_ink
+        import numpy as np
+        template=np.full((100,100),255,np.uint8);sheet=template.copy()
+        self.cv2.rectangle(sheet,(45,49),(63,51),0,-1)
+        self.cv2.rectangle(sheet,(59,57),(62,59),0,-1)
+        grid={'sample_box':[14,4]}
+        clue=surrounding_ink(sheet,template,grid,(50,50),{})
+        self.assertGreater(clue['attached_spill_pixels'],0)
+        self.assertGreater(clue['detached_spill_pixels'],0)
+        self.assertEqual(clue['outside_ink_pixels'],clue['attached_spill_pixels']+clue['detached_spill_pixels'])
+        self.cv2.rectangle(template,(40,45),(60,55),0,1)
+        shifted=self.cv2.warpAffine(template,np.float32([[1,0,1],[0,1,0]]),(100,100),borderValue=255)
+        clue=surrounding_ink(shifted,template,grid,(50,50),{})
+        self.assertGreater(clue['raw_outside_ink_pixels'],0)
+        self.assertEqual(clue['outside_ink_pixels'],0)
+
+    def test_extended_rotated_cross_over_fill_stays_pending(self):
+        from mcmark.vision import detect
+        import math
+        for angle in (30,45,60):
+            for color in (0,170):
+                sheet=self.blank.copy();self.fill(sheet,'B');x,y=map(round,self.q['centers'][1])
+                for theta in (angle,180-angle):
+                    dx=round(11*math.cos(math.radians(theta)));dy=round(11*math.sin(math.radians(theta)))
+                    self.cv2.line(sheet,(x-dx,y-dy),(x+dx,y+dy),color,1)
+                result=detect(sheet,self.q,self.config)
+                self.assertTrue(result['review_reasons'],(angle,color))
+                self.assertFalse(result.get('auto_accept_reason'),(angle,color))
+
     def test_looped_selection_does_not_cancel_another_choice(self):
         from mcmark.vision import detect
         sheet=self.blank.copy();self.fill(sheet,'A')
