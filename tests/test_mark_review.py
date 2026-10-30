@@ -149,6 +149,31 @@ class MarkReviewTests(unittest.TestCase):
                 self.assertTrue(result['review_reasons'],(angle,color))
                 self.assertFalse(result.get('auto_accept_reason'),(angle,color))
 
+    def test_unresolved_faint_competing_cross_cannot_silently_clear(self):
+        from mcmark.vision import detect
+        import math
+        for angle in (60,65):
+            for radius in (9,11):
+                sheet=self.blank.copy();self.fill(sheet,'A')
+                x,y=map(round,self.q['centers'][1])
+                for theta in (angle,180-angle):
+                    dx=round(radius*math.cos(math.radians(theta)))
+                    dy=round(radius*math.sin(math.radians(theta)))
+                    self.cv2.line(sheet,(x-dx,y-dy),(x+dx,y+dy),170,1)
+                result=detect(sheet,self.q,self.config)
+                self.assertTrue(result['review_reasons'])
+                self.assertIn('A',result['selected'])
+
+    def test_short_sparse_x_requires_review_without_discarding_selection(self):
+        from mcmark.vision import detect
+        for color in (0,100):
+            sheet=self.blank.copy();x,y=map(round,self.q['centers'][1])
+            self.cv2.line(sheet,(x-8,y-4),(x+8,y+4),color,2)
+            self.cv2.line(sheet,(x-8,y+4),(x+8,y-4),color,2)
+            result=detect(sheet,self.q,self.config)
+            self.assertIn('unresolved_cross_geometry',result['review_reasons'])
+            self.assertEqual(result['selected'],['B'])
+
     def test_looped_selection_does_not_cancel_another_choice(self):
         from mcmark.vision import detect
         sheet=self.blank.copy();self.fill(sheet,'A')

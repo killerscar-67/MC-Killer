@@ -27,6 +27,14 @@ def surrounding_ink(gray, template, grid, center, config):
     yy,xx = np.ogrid[top:bottom,left:right]
     outside = (abs(xx-x)>bw/2+3) | (abs(yy-y)>bh/2+3)
     raw_count = int(np.count_nonzero(ink[outside]))
+    # Test connectivity before masking printed borders: masking can split a
+    # real stroke at the box edge. A remote component never enters the box
+    # plus its three-pixel safety margin.
+    _,raw_components=cv2.connectedComponents((ink>0).astype(np.uint8),connectivity=8)
+    near_box=(abs(xx-x)<=bw/2+3)&(abs(yy-y)<=bh/2+3)
+    near_ids=np.unique(raw_components[near_box & (ink>0)])
+    near_ids=near_ids[near_ids!=0]
+    remote=(raw_components!=0)&~np.isin(raw_components,near_ids)
     # Residual printed borders/letters are not student ink. Remove their
     # one-pixel registration halo before counting detached spill.
     printed=cv2.dilate((reference<200).astype(np.uint8),np.ones((3,3),np.uint8))
@@ -47,7 +55,45 @@ def surrounding_ink(gray, template, grid, center, config):
                 slopes.add(1 if dx*dy>0 else -1)
     return {'outside_ink_pixels':count,'raw_outside_ink_pixels':raw_count,
             'attached_spill_pixels':attached,'detached_spill_pixels':count-attached,
+            'remote_outside_ink_pixels':int(np.count_nonzero(clean & outside & remote)),
             'cross_suspected':len(slopes)==2}
+
+
+def verify_choice_stability(gray, grid, selected, config, reference):
+    """Check identity under small sampling/contrast changes, not probability."""
+    if len(selected)!=1 or not grid.get('sample_box') or not gray.size or reference.shape!=gray.shape:
+        return {'verified':False}
+    bw,bh=grid['sample_box'];base=config.get('pixel_threshold',150)
+    thresholds=sorted(set(max(1,min(254,base+delta)) for delta in (-30,0,30)))
+    printed=cv2.dilate((reference<200).astype(np.uint8),np.ones((3,3),np.uint8))
+    minimum=1.0;maximum_other=0.0;central=[];verified=True;trials=0
+    for dx,dy in ((0,0),(-1,0),(1,0),(0,-1),(0,1)):
+        for threshold in thresholds:
+            densities={}
+            for label,(x,y) in zip(grid['labels'],grid['centers']):
+                x+=dx;y+=dy
+                left,right=round(x-bw/2),round(x+bw/2)
+                top,bottom=round(y-bh/2),round(y+bh/2)
+                if left<0 or top<0 or right>gray.shape[1] or bottom>gray.shape[0]:
+                    return {'verified':False,'reason':'sampling_boundary'}
+                patch=gray[top:bottom,left:right]
+                if not patch.size:return {'verified':False,'reason':'empty_sample'}
+                base_patch=reference[top:bottom,left:right]
+                usable=printed[top:bottom,left:right]==0
+                if np.count_nonzero(usable)<8:
+                    return {'verified':False,'reason':'insufficient_unprinted_sample'}
+                new_ink=(base_patch.astype(np.int16)-patch.astype(np.int16)>40)&(patch<threshold)
+                densities[label]=float(np.mean(new_ink[usable]))
+            chosen=densities.get(selected[0],0)
+            other=max((v for k,v in densities.items() if k!=selected[0]),default=0)
+            minimum=min(minimum,chosen);maximum_other=max(maximum_other,other)
+            verified=verified and chosen>=.12 and other<.08 and chosen-other>=.12
+            if dx==0 and dy==0:central.append(chosen)
+            trials+=1
+    verified=verified and min(central)>=config.get('density_threshold',.35)
+    return {'verified':bool(verified),'trials':trials,'minimum_chosen_ink_coverage':minimum,
+            'maximum_other_ink_coverage':maximum_other,'pixel_thresholds':thresholds,
+            'sample_jitter_pixels':1}
 
 
 def diagonal_support(ink, center):
@@ -132,6 +178,26 @@ def stroke_features(gray, template, grid, center, config):
             if all(np.count_nonzero(line_ink[band & ((xx-x)*side>=3)])>=2 for side in (-1,1)):
                 supported=True
         arms.append(supported)
+    # Separate veto for X arms missed by the older narrow slope family. It never changes selected choices or cancellation suggestions.
+    extended_pairs=[]
+    for sign in (-1,1):
+        supported=False
+        for slope in ((.45,.6,.8,1.0,1.2,1.5,1.8,2.2) if np.count_nonzero(line_ink)>=8 else ()):
+            band=(abs((yy-y)-sign*slope*(xx-x))<=1.25)&(abs(yy-y)>=bh/2+2)
+            sides=[]
+            for side in (-1,1):
+                hits=[]
+                for distance in range(4,10):
+                    px=round(x-left+side*distance/(1+slope*slope)**.5)
+                    py=round(y-top+sign*slope*side*distance/(1+slope*slope)**.5)
+                    region=line_ink[max(0,py-1):py+2,max(0,px-1):px+2]
+                    hits.append(bool(region.size and np.any(region)))
+                sides.append(sum(hits)/len(hits)>=.8)
+            if all(sides) and all(np.count_nonzero(line_ink[band & ((xx-x)*side>=2)])>=2 for side in (-1,1)):
+                supported=True
+                break
+        extended_pairs.append(supported)
+    extended_cross=all(extended_pairs)
     support=diagonal_support(line_ink,(x-left,y-top))
     straight=[value>=.8 for value in support]
     cross=(cross or all(arms)) and all(arms) and all(straight)
@@ -145,10 +211,27 @@ def stroke_features(gray, template, grid, center, config):
     fill_coverage=float(np.mean(line_ink[fill_core]>0)) if np.any(fill_core) else 0.0
     beyond_body=(abs(yy-y)>=bh/2+4)|(abs(xx-x)>=bw/2+4)
     far_pixels=int(np.count_nonzero(ink[beyond_body]))
+    _,body_components=cv2.connectedComponents((line_ink>0).astype(np.uint8),connectivity=8)
+    body_ids=np.unique(body_components[fill_core & (line_ink>0)])
+    body_ids=body_ids[body_ids!=0]
+    body=(line_ink>0)&np.isin(body_components,body_ids)
+    body_y,body_x=np.nonzero(body)
+    body_width=int(np.ptp(body_x)+1) if body_x.size else 0
+    body_height=int(np.ptp(body_y)+1) if body_y.size else 0
+    body_box_coverage=float(body.sum()/(body_width*body_height)) if body_width and body_height else 0.0
+    horizontal_fill=(len(body_ids)==1 and fill_coverage>=.70 and body_width>=bw
+                     and 0<body_height<=2*bh and body_width/body_height>=2.5
+                     and body_box_coverage>=.45
+                     and not np.any(line_ink[[0,-1],:]) and not np.any(line_ink[:,[0,-1]])
+                     and body_x.min()>0 and body_x.max()<patch.shape[1]-1
+                     and body_y.min()>0 and body_y.max()<patch.shape[0]-1)
     compact_fill=fill_coverage>=.80 and far_pixels<=2
     return {'new_ink_pixels':int(inner.sum()),'stroke_area':area,'stroke_span':span,
             'fill_core_coverage':fill_coverage,'far_arm_pixels':far_arms,
+            'body_width':body_width,'body_height':body_height,'body_box_coverage':body_box_coverage,
+            'horizontal_fill':bool(horizontal_fill),
             'beyond_fill_body_pixels':far_pixels,'compact_fill':bool(compact_fill),
+            'extended_cross_clue':bool(extended_cross or (body_height>2*bh and body_box_coverage<.45 and all(straight))),
             'thin_candidate':bool(thin),'diagonal_clue':bool(any(arms) and any(straight)), 'compact_cross_suspected':bool(cross),
             'straight_diagonal_support':support}
 
@@ -251,7 +334,7 @@ def verify_printed_anchors(window, target, pad, offset, height):
 
 def apply_review_policy(reading, config):
     """Accept isolated, well-registered strokes; preserve all ambiguous evidence."""
-    reading['review_policy'] = 'balanced-v4'
+    reading['review_policy'] = 'balanced-v5'
     reading['original_review_reasons'] = list(reading['review_reasons'])
     if config.get('review_policy') == 'conservative':
         reading['review_policy'] = 'conservative'
@@ -264,14 +347,30 @@ def apply_review_policy(reading, config):
     label = selected[0]
     clues = reading.get('mark_clues', {})
     mark = clues.get(label, {})
+    # Off-box annotations beside an otherwise empty option are distinct
+    # from ink entering its box. Keep raw clues and all cancellation flags.
+    remote_options=[]
+    for option,clue in clues.items():
+        if (option!=label and reading['densities'].get(option,1)<.08
+            and clue.get('new_ink_pixels',float('inf'))<=2
+            and not clue.get('diagonal_clue') and not clue.get('cross_suspected') and not clue.get('extended_cross_clue')):
+            remote_options.append(option)
+    stable=bool(reading.get('choice_stability',{}).get('verified'))
+    def relevant_spill(option,clue,field):
+        count=clue.get(field,float('inf'))
+        if option in remote_options and stable:
+            count=max(0,count-clue.get('remote_outside_ink_pixels',0))
+        return count
     compact_fill=bool(mark.get('compact_fill'))
     if 'possible_cancellation_stroke' in reasons and not compact_fill:return reading
     minor_spill=('stray_ink_or_cancellation' in reasons)
     # A verified compact fill can have connected pen spill, but detached
     # marks retain the smaller limit. This never overrides cross evidence.
-    spill_limit=24 if compact_fill and mark.get('detached_spill_pixels',float('inf'))<=2 else 16
+    horizontal_fill=bool(mark.get('horizontal_fill') and stable
+                         and not any(c.get('diagonal_clue') or c.get('cross_suspected') or c.get('extended_cross_clue') for c in clues.values()))
+    spill_limit=24 if horizontal_fill else 24 if compact_fill and mark.get('detached_spill_pixels',float('inf'))<=2 else 16
     if minor_spill and (mark.get('outside_ink_pixels',float('inf'))>spill_limit
-        or any(c.get('outside_ink_pixels',float('inf'))>4 for option,c in clues.items() if option!=label)):
+        or any(relevant_spill(option,c,'outside_ink_pixels')>4 for option,c in clues.items() if option!=label)):
         return reading
     alignment_score=reading.get('alignment_score',0)
     alignment_source='whole_row'
@@ -279,19 +378,22 @@ def apply_review_policy(reading, config):
     if .60<=alignment_score<.70 and anchors.get('verified'):
         # Printed position cannot resolve detached cancellation strokes.
         # Keep detached spill pending when whole-row evidence is weak.
-        if any(c.get('detached_spill_pixels',0)>2 for c in clues.values()):
+        if any(relevant_spill(option,c,'detached_spill_pixels')>2 for option,c in clues.items()
+               if 'detached_spill_pixels' in c and not (option==label and horizontal_fill)):
             return reading
         alignment_score=anchors.get('score',0);alignment_source='printed_anchor_agreement'
     if (alignment_score >= .70
         and reading['densities'][label] >= .08
         and mark.get('stroke_area', 0) >= 10
         and mark.get('stroke_span', 0) >= 7
-        and not any(c.get('cross_suspected') or (c.get('diagonal_clue') and (option!=label or not compact_fill)) for option,c in clues.items())
+        and not any(c.get('cross_suspected') or c.get('extended_cross_clue') or (c.get('diagonal_clue') and (option!=label or not compact_fill)) for option,c in clues.items())
         and all(c.get('new_ink_pixels', 0) <= 2 for option,c in clues.items() if option != label)):
         reading['review_reasons'] = []
-        reading['auto_accept_reason'] = ('isolated_compact_fill' if 'possible_cancellation_stroke' in reasons
+        reading['auto_accept_reason'] = ('isolated_horizontal_fill' if horizontal_fill and not compact_fill
+                                        else 'isolated_compact_fill' if 'possible_cancellation_stroke' in reasons
                                         else 'isolated_mark_minor_spill' if minor_spill else 'isolated_registered_stroke')
         reading['auto_accept_alignment_source']=alignment_source
+        reading['remote_ink_excluded_options']=[option for option in remote_options if stable and clues[option].get('remote_outside_ink_pixels',0)]
     return reading
 
 
@@ -338,6 +440,9 @@ def detect(gray, grid, config):
             reading['alignment_recovery']={'initial':initial,'offset':[dx,dy],'radius':pad,'score':float(score)}
         if .60<=score<.70 and len(reading['selected'])==1 and reading['review_reasons'] and 'uncertain_local_alignment' not in reading['review_reasons']:
             reading['printed_alignment']=verify_printed_anchors(window,target,pad,[dx,dy],int(min(ys)-top-8))
+        if ('uncertain_local_alignment' not in reading['review_reasons']
+            and len(reading['selected'])==1 and reading['review_reasons']):
+            reading['choice_stability']=verify_choice_stability(patch,local_grid,reading['selected'],config,target)
         return apply_review_policy(reading,config)
     radius = grid.get('radius', config.get('radius', 10)) * .65
     densities = {}
@@ -391,6 +496,8 @@ def detect(gray, grid, config):
             feature=stroke_features(gray,template,grid,center,config)
             clue=clues.setdefault(label,{})
             clue.update(feature)
+            if feature['extended_cross_clue']:
+                reasons.append('unresolved_cross_geometry')
             clue['cross_suspected']=bool(feature['compact_cross_suspected'] or (clue.get('cross_suspected') and clue.get('raw_outside_ink_pixels',clue.get('outside_ink_pixels',0))>=30))
             if clue['cross_suspected']:
                 reasons.append('possible_cross_out')
@@ -413,6 +520,10 @@ def detect(gray, grid, config):
     if len(thin_candidates)==1:
         reasons=[r for r in reasons if r not in ('blank','multiple')]
         if len(selected)>1: reasons.append('multiple')
+    # A short/faint stroke can miss both density and thin-candidate gates.
+    # Never silently accept another choice while such core ink is unresolved.
+    if any(clue.get('new_ink_pixels',0)>2 for label,clue in clues.items() if label not in selected):
+        reasons.append('unresolved_competing_ink')
     crossed = [label for label,clue in clues.items() if clue.get('cross_suspected')]
     remaining = [label for label in selected if label not in crossed]
     for label in crossed:
@@ -426,7 +537,7 @@ def detect(gray, grid, config):
         else remaining if (crossed or len(thin_candidates)==1) and len(remaining)==1 and len(thin_candidates)<=1 else None)
     return {'selected':selected, 'raw_selected':raw_selected, 'densities':densities,
             'uncertain':uncertain, 'mark_clues':clues, 'review_reasons':list(dict.fromkeys(reasons)),
-            'detector_version':'stroke-v2.4', 'thin_candidates':thin_candidates,
+            'detector_version':'stroke-v2.5', 'thin_candidates':thin_candidates,
             'suggested_selected':suggestion, 'suggestion_basis':'extended_diagonal' if extended_diagonals and suggestion else 'cross_or_thin' if suggestion else None}
 
 

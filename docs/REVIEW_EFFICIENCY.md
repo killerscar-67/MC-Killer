@@ -16,7 +16,7 @@ Diagnostics include alignment_version=row-bounded-v3, offset, score and search r
 
 ## Local validation, 29 October 2026
 
-- Python suite: 92 tests, 91 passed; PostgreSQL integration skipped locally and covered by CI. Five JavaScript checks cover scope, manual preservation, lazy/missing images, duplicate compact/detail selection and roster clipboard parsing.
+- Python suite: 101 tests, 100 passed; PostgreSQL integration skipped locally and covered by CI. Five JavaScript checks cover scope, manual preservation, lazy/missing images, duplicate compact/detail selection and roster clipboard parsing.
 - Previously labelled 12-page development batch (240 answers): direct agreement remains 233/240, pending answers originally 63, balanced-v2 at 0.70: 61, balanced-v3: 54 and zero observed unflagged errors. This is a regression replay, not independent accuracy evidence.
 - Six earlier sheets (600 positions): selections and cancellation suggestions unchanged.
 - Simulated increasing vertical drift on the eighth development sheet: failed-alignment rows 8 -> 0, direct matches 11/20 -> 18/20, zero observed unflagged errors. The two remaining mismatches remain flagged multiple marks. The perturbation reflects the drift pattern observed in hosted diagnostics; this does not prove the exact production homography is fixed.
@@ -53,3 +53,9 @@ Answer ink can lower whole-row correlation even when the printed letters remain 
 The 0.70 minimum now applies to either whole-row matching or this separately checked printed strip; these different correlation measurements are not calibrated probabilities. Printed agreement never resolves cancellation intent. More than two detached spill pixels around any option blocks this additional clearance path. All existing cross, competing-ink, density, compact-fill and conservative-mode guards remain. Tests specifically keep dark/faint rotated crosses pending. A less restrictive trial produced 39 reviews but failed a faint-cross safety test and was rejected.
 
 Final development replay: **54 -> 47 pending of 240 (19.6%)**, unchanged 233/240 direct agreement and zero observed unflagged errors; all seven mismatches remain flagged. This is still too much routine review and uses the same development material. Remaining warning cards can be inspected together and explicitly confirmed in the compact gallery. Independent writer/scanner validation and a fresh hosted run remain required. No existing assessment is reprocessed.
+
+## Context and robustness checks (balanced-v5 / stroke-v2.5)
+
+The latest research candidate has **35/240 pending reviews (14.58%)**, unchanged 233 direct matches and zero observed unflagged errors after rerendering/registering the PDF. It combines remote ink context beside otherwise empty options, fifteen template-subtracted sampling/contrast checks and narrow horizontal-fill geometry. Additional cancellation and competing-ink vetoes retain two reviews that a less guarded candidate cleared. Raw evidence, selections, suggestions and the 0.70 correlation minimum remain unchanged. Existing reviewed assessments are not reprocessed.
+
+See [the full research, ablations, reproducible benchmark and limitations](REVIEW_REDUCTION_RESEARCH.md). Degraded inputs need 14.17–16.25% review in these trials. The broader synthetic matrix improves but still has 17 accepted cancellation configurations, so this is not a blanket accuracy guarantee. New-writer/scanner validation and a fresh hosted assessment are still required before claiming a production rate.

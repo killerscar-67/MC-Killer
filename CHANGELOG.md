@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-30 — Research-led review reduction (PR #7)
+
+- Added remote-ink context beside empty options, fifteen template-subtracted sampling/contrast checks and a narrow horizontal-fill exception. Retained the 0.70 acceptance correlation minimum, raw evidence and all selections/suggestions.
+- Added radial/sparse-cross vetoes and explicit unresolved competing-ink review, including exclusion from automatic bulk selection. These strengthen cancellation handling while preserving image-based teacher confirmation.
+- Fresh registered-PDF development replay: 47 → 35 pending of 240 (14.58%); unchanged 233 direct matches and all seven mismatches flagged. Six derived image conditions show no unflagged errors; degraded inputs can exceed 15% review.
+- Expanded cancellation stress: 37 → 17 automatic acceptances across 360 synthetic scenarios, no newly accepted cases. The remaining 17 are documented failures, not passed tests or a zero-risk claim.
+- Added a reproducible private-data benchmark and a sourced research report covering alternatives, ablations, accuracy limits and independent-validation requirements. Local checks: 101 Python tests (100 passed, one PostgreSQL integration skip), five JavaScript checks passed. No merge, deployment or existing-assessment rewrite.
+
 ## 2026-10-30 — Printed-anchor alignment verification
 
 - Added a bounded printed-letter search for weak whole-row matches, requiring correlation >=0.70, a unique peak and agreement within one pixel. Raw scores and answer sampling positions are preserved.

@@ -129,7 +129,8 @@ def visual_review_eligible(answer):
 def batch_review_eligible(answer):
     """Permit explicit visual batch confirmation only for isolated single choices."""
     blockers={'multiple','blank','possible_cross_out','possible_cancellation_stroke',
-              'uncertain_local_alignment','ambiguous_thin_marks'}
+              'uncertain_local_alignment','ambiguous_thin_marks',
+              'unresolved_competing_ink','unresolved_cross_geometry'}
     return (len(answer.get('selected',[]))==1 and bool(answer.get('review_reasons'))
             and not answer.get('teacher_review')
             and not blockers.intersection(answer.get('review_reasons',[]))
