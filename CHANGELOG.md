@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-11-02 — Shallow-cancellation regression fixes (PR #7)
+
+- Added a low-contrast corner-tip ambiguity veto with fractional-centre checks and constrained mirrored printed-border context. It requests review without discarding a choice or changing cancellation suggestions, grading or the 0.70 clearance correlation minimum.
+- All 17 recorded failures now require review: automatic acceptances 17 → 0 in the 360-case matrix. Also checked 476 position/option variants and 28 ordinary-fill controls; all cancellation variants reviewed and all controls accepted.
+- Fresh-PDF development replay: 35 → 41 pending of 240 (17.08%), unchanged 233 direct matches, all seven mismatches flagged and zero observed unflagged errors. Degraded low-contrast input needs up to 59 reviews; independent validation remains outstanding.
+- Added six regression test methods and a current follow-up report. Local checks: 107 Python tests (106 passed, one PostgreSQL integration skip), five JavaScript checks passed. Existing assessments remain untouched; no merge or deployment.
+
 ## 2026-10-30 — Research-led review reduction (PR #7)
 
 - Added remote-ink context beside empty options, fifteen template-subtracted sampling/contrast checks and a narrow horizontal-fill exception. Retained the 0.70 acceptance correlation minimum, raw evidence and all selections/suggestions.

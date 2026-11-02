@@ -1,5 +1,7 @@
 # Review-reduction research and validation — 30 October 2026
 
+**2 November follow-up:** the latest stroke-v2.6 candidate flags all 17 recorded failures and has zero acceptances in the original 360-case matrix. Reviews increase to **41/240 (17.08%)**. The 35-review result and 17 remaining failures below describe the earlier version. See [the cancellation-regression follow-up](CANCELLATION_REGRESSIONS_20261102.md) for current results and limits.
+
 ## Outcome
 
 The final candidate, stroke-v2.5 / balanced-v5, requires **35 reviews out of 240 configured questions (14.58%)** on the existing labelled development batch. The previous PR #7 head required 47; the earlier shape-only version required 54. This meets the requested 10–15% range on this batch, without changing any detected selections or cancellation suggestions. Direct agreement remains 233/240 (97.08%); all seven mismatches require review, and all 205 automatically accepted readings match the labels.

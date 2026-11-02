@@ -116,6 +116,70 @@ def diagonal_support(ink, center):
     return supports
 
 
+def shallow_cancellation_evidence(patch, reference, center, sample_box):
+    """Flag ambiguous corner tips; never infer cancellation or change answers.
+
+    Thin crossings can expose very few pixels outside a dark fill. A paired
+    corner pattern can remain even when the printed border hides other arms.
+    Check both neighbouring pixel centres for fractional layout coordinates.
+    """
+    bw,bh=sample_box
+    difference=reference.astype(np.int16)-patch.astype(np.int16)
+    ink=(difference>18)&(patch<200)
+    tip_ink=(difference>8)&(patch<200)
+    empty={'shallow_cross_clue':False,'shallow_tip_mode':None,
+           'short_tip_counts':[0,0],'long_tip_counts':[0,0]}
+    if np.count_nonzero(tip_ink)<3:return empty
+    yy,xx=np.ogrid[:patch.shape[0],:patch.shape[1]]
+    for cx in sorted({int(np.floor(center[0])),int(np.ceil(center[0]))}):
+        for cy in sorted({int(np.floor(center[1])),int(np.ceil(center[1]))}):
+            dx,dy=xx-cx,yy-cy;min_y=bh/2+2
+            middle=(abs(dx)<=3)&(abs(dy)>=min_y)&(abs(dy)<=min_y+2)
+            middle_coverage=float(np.mean(ink[middle])) if np.any(middle) else 1.0
+            counts=[]
+            for min_x in (bw/2-1,bw/2+2):
+                pair=[]
+                for sign in (-1,1):
+                    best=0
+                    for slope in (.4,.5,.6,.7):
+                        band=(abs(dy-sign*slope*dx)<=.8)&(abs(dy)>=min_y)&(abs(dx)>=min_x)&(abs(dx)<=bw/2+7)
+                        best=max(best,min(int(np.count_nonzero(tip_ink[band & (dx*side>0)])) for side in (-1,1)))
+                    pair.append(best)
+                counts.append(pair)
+            mode=None
+            if all(v>=1 for v in counts[0]) and middle_coverage<=.20:mode='opposite_diagonals'
+            elif all(v>=2 for v in counts[1]):mode='extended_tips'
+            # If a printed border obscures an arm, narrow corner lobes separated
+            # by a clear centre still make a dense fill ambiguous. This is a
+            # review veto, not a positive X classification. Visible lobes must
+            # remain tiny, and their mirrors must contain ink or dark print.
+            core=(abs(dx)<=bw/2-2)&(abs(dy)<=bh/2)
+            dense=bool(np.any(core) and np.mean(ink[core])>=.70)
+            if not mode and dense:
+                for side in (-1,1):
+                    strip=(dy*side>=min_y)&(dy*side<=min_y+2)
+                    gap=strip&(abs(dx)<=3)
+                    tips=strip&(abs(dx)>=bw/2-1)&(abs(dx)<=bw/2+3)
+                    supported_pairs=[];hidden_pairs=[]
+                    for lateral in (-1,1):
+                        py,px=np.nonzero(tip_ink & tips & (dx*lateral>0))
+                        mirrored=2*cy-py
+                        valid=(mirrored>=0)&(mirrored<patch.shape[0])
+                        py,px,mirrored=py[valid],px[valid],mirrored[valid]
+                        compact=bool(0<px.size<=3 and np.ptp(py)==0 and np.ptp(px)<=2)
+                        hidden=(reference[mirrored,px]<200)&~ink[mirrored,px]
+                        supported_pairs.append(bool(compact and np.any(tip_ink[mirrored,px]|hidden)))
+                        hidden_pairs.append(bool(compact and np.any(hidden)))
+                    if np.any(gap) and np.mean(ink[gap])<=.20 and all(supported_pairs) and any(hidden_pairs):
+                        mode='border_occluded_tips'
+                        break
+            if mode:
+                return {'shallow_cross_clue':True,'shallow_tip_mode':mode,
+                        'short_tip_counts':counts[0],'long_tip_counts':counts[1],
+                        'corner_middle_coverage':middle_coverage}
+    return empty
+
+
 def stroke_features(gray, template, grid, center, config):
     """Template-subtracted candidate strokes; cancellation is always provisional."""
     x,y = center
@@ -226,12 +290,13 @@ def stroke_features(gray, template, grid, center, config):
                      and body_x.min()>0 and body_x.max()<patch.shape[1]-1
                      and body_y.min()>0 and body_y.max()<patch.shape[0]-1)
     compact_fill=fill_coverage>=.80 and far_pixels<=2
-    return {'new_ink_pixels':int(inner.sum()),'stroke_area':area,'stroke_span':span,
+    shallow=shallow_cancellation_evidence(patch,ref,(x-left,y-top),(bw,bh))
+    return {**shallow,'new_ink_pixels':int(inner.sum()),'stroke_area':area,'stroke_span':span,
             'fill_core_coverage':fill_coverage,'far_arm_pixels':far_arms,
             'body_width':body_width,'body_height':body_height,'body_box_coverage':body_box_coverage,
             'horizontal_fill':bool(horizontal_fill),
             'beyond_fill_body_pixels':far_pixels,'compact_fill':bool(compact_fill),
-            'extended_cross_clue':bool(extended_cross or (body_height>2*bh and body_box_coverage<.45 and all(straight))),
+            'extended_cross_clue':bool(shallow['shallow_cross_clue'] or extended_cross or (body_height>2*bh and body_box_coverage<.45 and all(straight))),
             'thin_candidate':bool(thin),'diagonal_clue':bool(any(arms) and any(straight)), 'compact_cross_suspected':bool(cross),
             'straight_diagonal_support':support}
 
@@ -334,7 +399,7 @@ def verify_printed_anchors(window, target, pad, offset, height):
 
 def apply_review_policy(reading, config):
     """Accept isolated, well-registered strokes; preserve all ambiguous evidence."""
-    reading['review_policy'] = 'balanced-v5'
+    reading['review_policy'] = 'balanced-v6'
     reading['original_review_reasons'] = list(reading['review_reasons'])
     if config.get('review_policy') == 'conservative':
         reading['review_policy'] = 'conservative'
@@ -537,7 +602,7 @@ def detect(gray, grid, config):
         else remaining if (crossed or len(thin_candidates)==1) and len(remaining)==1 and len(thin_candidates)<=1 else None)
     return {'selected':selected, 'raw_selected':raw_selected, 'densities':densities,
             'uncertain':uncertain, 'mark_clues':clues, 'review_reasons':list(dict.fromkeys(reasons)),
-            'detector_version':'stroke-v2.5', 'thin_candidates':thin_candidates,
+            'detector_version':'stroke-v2.6', 'thin_candidates':thin_candidates,
             'suggested_selected':suggestion, 'suggestion_basis':'extended_diagonal' if extended_diagonals and suggestion else 'cross_or_thin' if suggestion else None}
 
 
