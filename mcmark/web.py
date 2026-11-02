@@ -19,7 +19,7 @@ from flask import Flask, abort, flash, redirect, render_template, request, send_
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 from .core import export, grade, validate
-from .review import refresh_review, batch_review_eligible
+from .review import refresh_review, batch_review_eligible, visual_review_eligible
 from .database import connect,initialize,begin_write,locked,next_queued,INTEGRITY_ERRORS
 from .storage import configured_storage, job_prefix, relative_evidence, validate_evidence, StorageError
 from .roster import parse_roster, roster_digest, with_absences, assign_roster, submission_csv
@@ -289,7 +289,15 @@ def create_app(data=None, testing=False, start_worker=True):
                 if not relative.parts or relative.parts[0]!='review' or '..' in relative.parts: return None
             except ValueError: return None
             return url_for('image',jid=jid,path=relative.as_posix())
-        return render_template('question_review.html',job=job,groups=groups,asset=asset,
+        visual_entries=[{**entry,'question':g['question'],'automatic':batch_review_eligible(entry['answer'])}
+                        for g in groups for entry in g['entries']
+                        if visual_review_eligible(entry['answer']) and asset(entry['answer'].get('review_crop'))]
+        alignment_rows=[{'index':i,'row':r,'questions':[a['question'] for a in r['responses']
+                        if 'uncertain_local_alignment' in a.get('review_reasons',[]) and not a.get('teacher_review')]}
+                        for i,r in enumerate(rows)]
+        return render_template('question_review.html',job=job,groups=groups,asset=asset,visual_entries=visual_entries,
+            alignment_rows=[entry for entry in alignment_rows if entry['questions']],
+            visual_warning_count=sum(not entry['automatic'] for entry in visual_entries),
             pending_answers=sum(len(g['entries']) for g in groups),batch_review_eligible=batch_review_eligible,
             identity_rows=[{'index':i,'row':r} for i,r in enumerate(rows) if r.get('sheet_review_issues')])
 

@@ -36,7 +36,9 @@ def run(inputs, config, output, corrections=None):
                         reading = detect(gray,q,config)
                         responses.append(reading)
                         if reading['review_reasons']:
-                            reading['review_crop'] = save_question_crop(gray,q,out/'review'/'questions'/f'{sheet_sequence:05d}-q{len(responses):03d}.png')
+                            dx,dy=reading.get('local_offset',[0,0]) if 'uncertain_local_alignment' not in reading['review_reasons'] else [0,0]
+                            evidence_grid={**q,'centers':[[x+dx,y+dy] for x,y in q['centers']]}
+                            reading['review_crop'] = save_question_crop(gray,evidence_grid,out/'review'/'questions'/f'{sheet_sequence:05d}-q{len(responses):03d}.png')
                             log('question_review', question=q['id'], **reading)
                     result = dict(file=str(path),page=page_number,**profile,**grade(responses,config))
                     result['sheet_review_issues'] = [e['kind'] for e in events[start:] if e['kind'] != 'question_review']

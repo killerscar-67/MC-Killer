@@ -161,9 +161,31 @@ class TeacherWebTests(unittest.TestCase):
         page=self.client.get(f'/assessments/{jid}/review')
         self.assertEqual(page.status_code,200)
         self.assertEqual(page.data.count(b'data-batch-choice'),1)
+        self.assertIn(b'aria-label="Assessment-wide review"',page.data)
+        self.assertIn(b'data-batch-select data-batch-all',page.data)
+        self.assertIn(b'data-batch-prepare data-batch-all',page.data)
+        self.assertEqual(page.data.count(b'data-batch-select'),2) # assessment and question
         self.assertIn(b'data-field="decision-s0q2"',page.data)
         self.assertNotIn(b'data-field="decision-s1q2"',page.data)
         self.assertIn(b'value="" checked',page.data)
+
+    def test_compact_visual_rows_include_warned_singles_and_group_alignment_failures(self):
+        jid,version=self.grouped_fixture()
+        with connect(self.data) as db:
+            rows=json.loads(db.execute('SELECT results FROM jobs WHERE id=?',(jid,)).fetchone()[0])
+            rows[0]['responses'][1].update(selected=['B'],review_reasons=['possible_cross_out'],review_crop='review/test.png',mark_clues={'B':{'cross_suspected':True}},densities={'B':1.0})
+            rows[1]['responses'][1].update(selected=['A'],review_reasons=['uncertain_local_alignment'],review_crop='review/test.png')
+            db.execute('UPDATE jobs SET results=? WHERE id=?',(json.dumps(rows),jid))
+        page=self.client.get(f'/assessments/{jid}/review')
+        self.assertIn(b'data-visual-choice data-field="decision-s0q2"',page.data)
+        self.assertNotIn(b'data-visual-choice data-field="decision-s1q2"',page.data)
+        self.assertEqual(page.data.count(b'data-batch-choice'),0)
+        self.assertIn(b'Sheet alignment needs attention',page.data)
+        form={'csrf':self.csrf,'version':version,'s0q2':'B'}
+        self.assertEqual(self.client.post(f'/assessments/{jid}/review',data=form).status_code,302)
+        with connect(self.data) as db:result=json.loads(db.execute('SELECT results FROM jobs WHERE id=?',(jid,)).fetchone()[0])
+        self.assertEqual(result[0]['responses'][1]['teacher_review']['decision'],['B'])
+        self.assertFalse(result[1]['responses'][1].get('teacher_review'))
 
     def test_group_review_ownership_csrf_and_finalization(self):
         jid,version=self.grouped_fixture()
@@ -173,6 +195,7 @@ class TeacherWebTests(unittest.TestCase):
         self.assertEqual(other.post(f'/assessments/{jid}/review',data={'csrf':'token','version':version}).status_code,404)
         self.assertEqual(self.client.post(f'/assessments/{jid}/review',data={'version':version}).status_code,400)
         with connect(self.data) as db:db.execute('UPDATE jobs SET finalized=1 WHERE id=?',(jid,))
+        self.assertNotIn(b'data-batch-all',self.client.get(f'/assessments/{jid}/review').data)
         self.assertEqual(self.client.post(f'/assessments/{jid}/review',data={'csrf':self.csrf,'version':version,'s0q2':'B'}).status_code,409)
 
     def test_disguised_and_nonfinite_uploads_rejected(self):
